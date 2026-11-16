@@ -6,6 +6,8 @@
 #include <core/Types.h>
 #include <scene/Camera.h>
 
+#include <iostream>
+
 namespace pt
 {
 // cpu side of truth - GpuScene.h mirrors this on gpu

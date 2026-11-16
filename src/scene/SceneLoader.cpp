@@ -74,10 +74,39 @@ Scene makeCornellBox() {
     return s;
 }
 
-std::optional<Scene> loadGltf(const std::filesystem::path& path) {
-    PT_UNIMPLEMENTED("loadGltf");
-    (void)path;
-    return std::nullopt;
+template <typename AddFunction>
+void addGLTFMeshToScene(GltfNode* currentNode, Scene* scene, AddFunction&& add) {
+    glm::mat4 currentMatrix = currentNode->getMatrix();
+    for (auto p : currentNode->primitives) {
+        Mesh currentMesh;
+        currentMesh.vertices = std::move(p.vertices);
+        currentMesh.indices = std::move(p.indices);
+        currentMesh.materialIndex = 0;
+        add(currentMesh, currentMatrix);
+    }
+
+    for (auto child : currentNode->children) {
+        addGLTFMeshToScene(child, scene, std::forward<AddFunction>(add));
+    }
+}
+
+Scene loadGltf(const std::string& path) {
+     Scene s;
+     const u32 white = s.addMaterial({ .name = "white", .baseColor = {0.73f, 0.73f, 0.73f} });
+     
+     auto add = [&](Mesh m, glm::mat4 matrix) { s.addInstance(s.addMesh(std::move(m)), matrix); };
+
+     GltfMesh* mesh = gltfload::loadGLTFFile(path);
+     for (auto node : mesh->parentNodes) {
+         addGLTFMeshToScene(node, &s, add);
+     }
+     
+     s.camera.position = { 0.0f, 1.0f, 3.4f };
+     s.camera.yaw = -90.0f;
+     s.camera.pitch = 0.0f;
+     s.camera.verticalFovDeg = 40.0f;
+     s.markDirty(DirtyAll);
+     return s;
 }
 
 } // namespace pt
