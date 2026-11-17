@@ -14,6 +14,7 @@ struct HitPayload
 {
     float  hitT; // < 0 => miss
     float3 position;
+    float2 uv;
     float3 normal;
     uint   materialIndex;
 };
@@ -40,8 +41,10 @@ void rayGen()
     float3 color = float3(0.0);
     if (p.hitT >= 0.0) {
         // Debug view: normals mapped from [-1,1] to [0,1].
-        color = p.normal * 0.5 + 0.5;
+        // color = p.normal * 0.5 + 0.5;
         // Albedo view instead: color = pc.materials[p.materialIndex].baseColor;
+        GpuMaterial m = pc.materials[p.materialIndex];
+        color = m.baseColor * gTextures[NonUniformResourceIndex(m.baseColorTexture)].SampleLevel(p.uv,0).rgb;
     }
 
     gImages[kSlotAccumulation][pixel] = float4(color, 1.0);
@@ -67,5 +70,6 @@ void closestHit(inout HitPayload p, in BuiltInTriangleIntersectionAttributes att
     p.hitT = RayTCurrent();
     p.position = s.position;
     p.normal = s.normal;
+    p.uv = s.uv;
     p.materialIndex = s.materialIndex;
 }

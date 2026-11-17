@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "Context.h"
+#include "Immediate.h"
 
 namespace pt::vk
 {
@@ -82,7 +83,7 @@ Image2D::Image2D(const Context& ctx, Extent2D extent, VkFormat format, VkImageUs
 	info.imageType = VK_IMAGE_TYPE_2D;
 	info.format = format;
 	info.extent = { extent.width, extent.height, 1 };
-	info.mipLevels = 1;
+	info.mipLevels = m_mipLevels;
 	info.arrayLayers = 1;
 	info.samples = VK_SAMPLE_COUNT_1_BIT;
 	info.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -138,6 +139,117 @@ void Image2D::transition(VkCommandBuffer cmd, const ImageState& next)
 {
 	imageBarrier(cmd, m_image, m_state, next);
 	m_state = next;
+}
+
+void Image2D::generateMipmaps(VkCommandBuffer& commandBuffer) {
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.image = handle();
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
+	barrier.subresourceRange.levelCount = 1;
+	
+	int32_t mipWidth = m_extent.width;
+	int32_t mipHeight = m_extent.height;
+	
+	for (uint32_t i = 1; i < m_mipLevels; i++) {
+		barrier.subresourceRange.baseMipLevel = i - 1;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	
+		vkCmdPipelineBarrier(commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier);
+	
+		VkImageBlit blit{};
+		blit.srcOffsets[0] = { 0, 0, 0 };
+		blit.srcOffsets[1] = { mipWidth, mipHeight, 1 };
+		blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		blit.srcSubresource.mipLevel = i - 1;
+		blit.srcSubresource.baseArrayLayer = 0;
+		blit.srcSubresource.layerCount = 1;
+		blit.dstOffsets[0] = { 0, 0, 0 };
+		blit.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1 };
+		blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		blit.dstSubresource.mipLevel = i;
+		blit.dstSubresource.baseArrayLayer = 0;
+		blit.dstSubresource.layerCount = 1;
+	
+		vkCmdBlitImage(commandBuffer,
+			handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1, &blit,
+			VK_FILTER_LINEAR);
+	
+		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	
+		vkCmdPipelineBarrier(commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier);
+	
+		if (mipWidth > 1) mipWidth /= 2;
+		if (mipHeight > 1) mipHeight /= 2;
+	}
+	
+	barrier.subresourceRange.baseMipLevel = m_mipLevels - 1;
+	barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	
+	vkCmdPipelineBarrier(commandBuffer,
+		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+		0, nullptr,
+		0, nullptr,
+		1, &barrier);
+}
+
+void Image2D::uploadFromPixelData(const Context& ctx, void* data) {
+	size_t dataSize = m_extent.width * m_extent.height * 4;
+	pt::vk::Buffer uploadBuffer = pt::vk::Buffer(ctx, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, pt::vk::MemoryUsage::Upload);
+	memcpy(uploadBuffer.mapped(), data, dataSize);
+	
+	constexpr pt::vk::ImageState kDstOptimal{ VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT };
+	
+	auto uploadFunction = [&](VkCommandBuffer cmd) {
+		transition(cmd, kDstOptimal);
+	
+		VkBufferImageCopy copyRegion = {};
+		copyRegion.bufferOffset = 0;
+		copyRegion.bufferRowLength = 0;
+		copyRegion.bufferImageHeight = 0;
+	
+		copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copyRegion.imageSubresource.mipLevel = 0;
+		copyRegion.imageSubresource.baseArrayLayer = 0;
+		copyRegion.imageSubresource.layerCount = 1;
+
+		VkExtent3D ext{
+			.width = m_extent.width,
+			.height = m_extent.height,
+			.depth = 1
+		};
+		copyRegion.imageExtent = ext;
+	
+		vkCmdCopyBufferToImage(cmd, uploadBuffer.handle(), handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+		generateMipmaps(cmd);
+	};
+	
+	submitImmediate(ctx, uploadFunction);
+	
+	uploadBuffer.destroy();
 }
 
 //-------------BARRIERS------------

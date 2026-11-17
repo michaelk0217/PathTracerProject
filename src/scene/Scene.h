@@ -7,6 +7,7 @@
 #include <scene/Camera.h>
 
 #include <iostream>
+#include <vulkan/vulkan.hpp>
 
 namespace pt
 {
@@ -28,13 +29,32 @@ struct Mesh {
 struct Material
 {
 	std::string name;
-	vec3 baseColor{ 0.8f };
+	vec3 baseColor{ 1.f };
 	float roughness = 1.0f;
 	vec3 emission { 0.0f };
 	float metallic = 0.0f;
 	float ior = 1.5f;
 	float transmission = 0.0f;
 	i32 baseColorTexture = -1; // index into Scene::texturePaths, -1 = none
+	i32 normalTexture = -1;
+	i32 metallicRoughnessTexture = -1;
+};
+
+struct SamplerDesc
+{
+	VkFilter magFilter;
+	VkFilter minFilter;
+	VkSamplerAddressMode wrapU;
+	VkSamplerAddressMode wrapV;
+};
+
+struct Texture
+{
+	u32 width, height;
+	u32 mipLevels = 1;
+	std::vector<u8> pixels;
+	SamplerDesc sampler;
+	VkFormat format;
 };
 
 struct Instance
@@ -49,6 +69,7 @@ enum DirtyFlags : u32
 	DirtyGeometry = 1u << 0, // meshes changed -> rebuild BLAS + vertex/index buffs
 	DirtyInstances = 1u << 1, // transforms changed -> refit/rebuild TLAS
 	DirtyMaterials = 1u << 2, //material params changed, reupload material buffer
+	DirtyTextures = 1u << 3, // textures changed, upload textures
 	DirtyAll = 0xFFFFFFFFu,
 };
 
@@ -58,7 +79,7 @@ public:
 	std::vector<Mesh> meshes;
 	std::vector<Material> materials;
 	std::vector<Instance> instances;
-	std::vector<std::string> texturePaths;
+	std::vector<Texture> textures;
 	Camera camera;
 
 	void markDirty(u32 flags) { m_dirty |= flags; }

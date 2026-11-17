@@ -122,6 +122,54 @@ namespace gltfload {
         mesh->numNodes++;
     }
 
+    pt::Texture loadTexture(tinygltf::Model* model, VkFormat format, uint32_t imageIndex) {
+        tinygltf::Image& curImage = model->images[imageIndex];
+        pt::Texture tex{};
+        tex.pixels.resize(curImage.width * curImage.height * 4);
+
+        switch (curImage.component) {
+        case 4:
+            memcpy(tex.pixels.data(), curImage.image.data(), tex.pixels.size());
+            break;
+        case 3:
+        {
+            std::vector<unsigned char> rgb;
+            rgb.resize(curImage.width * curImage.height * 3);
+            memcpy(rgb.data(), curImage.image.data(), rgb.size());
+            for (size_t j = 0; j < (size_t)curImage.width * curImage.height; j++) {
+                tex.pixels[j * 4] = rgb[j * 3];
+                tex.pixels[j * 4 + 1] = rgb[j * 3 + 1];
+                tex.pixels[j * 4 + 2] = rgb[j * 3 + 2];
+                tex.pixels[j * 4 + 3] = 255;
+            }
+            break;
+        }
+        case 1:
+        {
+            std::vector<unsigned char> r;
+            r.resize(curImage.width * curImage.height);
+            memcpy(r.data(), curImage.image.data(), r.size());
+            for (size_t j = 0; j < (size_t)curImage.width * curImage.height; j++) {
+                tex.pixels[j * 4] = tex.pixels[j * 4 + 1] = tex.pixels[j * 4 + 2] = tex.pixels[j * 4 + 3] = r[j];
+            }
+            break;
+        }
+        }
+
+        tex.width = curImage.width;
+        tex.height = curImage.height;
+
+        tex.format = format;
+        tex.sampler.minFilter = VK_FILTER_LINEAR;
+        tex.sampler.magFilter = tex.sampler.minFilter;
+        tex.sampler.wrapU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        tex.sampler.wrapV = tex.sampler.wrapU;
+
+        tex.mipLevels = static_cast<uint32_t>(std::floor(std::log2((std::max)(curImage.width, curImage.height)))) + 1;
+
+        return tex;
+    }
+
     GltfMesh* loadGLTFFile(const std::string& filepath) {
         GltfMesh* mesh = new GltfMesh();
 
@@ -147,13 +195,58 @@ namespace gltfload {
 
         if (!fileLoaded) {
             std::cout << "Failed to load glTF file: " << filepath << std::endl;
-            throw std::runtime_error("[LIGHTLOADER] Failed to load glTF file: " + filepath);
+            throw std::runtime_error("Failed to load glTF file: " + filepath);
         }
 
         const tinygltf::Scene& scene = model->scenes[model->defaultScene];
         for (const auto& nodeIndex : scene.nodes) {
             const tinygltf::Node& node = model->nodes[nodeIndex];
             gltfload::loadNode(model, node, mesh, -1, nullptr);
+        }
+
+        std::vector<uint32_t> textureIndices(model->textures.size());
+        for (size_t i = 0; i < model->textures.size(); i++) {
+            textureIndices[i] = model->textures[i].source;
+        }
+
+        // std::unordered_set<uint32_t> imageIsSRGB;
+        for (size_t i = 0; i < model->materials.size(); i++) {
+            pt::Material material;
+            tinygltf::Material gltfMat = model->materials[i];
+            if (gltfMat.values.find("baseColorFactor") != gltfMat.values.end()) {
+                material.baseColor = glm::make_vec3(gltfMat.values["baseColorFactor"].ColorFactor().data());
+            }
+            if (gltfMat.values.find("baseColorTexture") != gltfMat.values.end()) {
+                material.baseColorTexture = textureIndices[gltfMat.values["baseColorTexture"].TextureIndex()] + 2; // +2 for the three dummy images loaded at first
+                // imageIsSRGB.insert(material.baseColorTexture);
+            }
+            else { material.baseColorTexture = DUMMY_COLOR_TEX_INDEX; }
+
+            if (gltfMat.additionalValues.find("normalTexture") != gltfMat.additionalValues.end()) {
+                material.normalTexture = textureIndices[gltfMat.additionalValues["normalTexture"].TextureIndex()];
+            }
+            else { material.normalTexture = DUMMY_NORMAL_TEX_INDEX; }
+
+            if (gltfMat.values.find("metallicRoughnessTexture") != gltfMat.values.end()) {
+                material.metallicRoughnessTexture = textureIndices[gltfMat.values["metallicRoughnessTexture"].TextureIndex()];
+            }
+            else { material.metallicRoughnessTexture = DUMMY_METALROUGH_TEX_INDEX; }
+
+            if (gltfMat.values.find("metallicFactor") != gltfMat.values.end()) {
+                material.metallic = (float)gltfMat.values["metallicFactor"].Factor();
+            }
+
+            if (gltfMat.values.find("roughnessFactor") != gltfMat.values.end()) {
+                material.roughness = (float)gltfMat.values["roughnessFactor"].Factor();
+            }
+
+            mesh->materials.push_back(material);
+        }
+
+        for (uint32_t i = 0; i < model->images.size(); i++) {
+            // VkFormat format = (imageIsSRGB.find(i) == imageIsSRGB.end()) ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8G8B8A8_SRGB;
+            VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
+            mesh->textures.push_back(loadTexture(model, format, i));
         }
 
         delete model;

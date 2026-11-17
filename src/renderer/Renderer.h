@@ -25,7 +25,7 @@ namespace pt
         ~Renderer();
 
         bool renderFrame(Scene& scene, const RenderSettings& settings);
-
+        void uploadImage(u32 slot, VkImageView view, VkSampler sampler);
         void resize(Extent2D extent);
 
     private:

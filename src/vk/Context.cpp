@@ -150,6 +150,7 @@ void Context::pickPhysicalDevice()
     {
         VkPhysicalDeviceProperties props{};
         vkGetPhysicalDeviceProperties(pd, &props);
+        caps.maxAnisotropy = props.limits.maxSamplerAnisotropy;
         if (props.apiVersion < VK_API_VERSION_1_3) continue;
 
         const auto exts = deviceExtensions(pd);

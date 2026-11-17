@@ -6,8 +6,18 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include "Scene.h"
+#include <unordered_set>
 
 #include <tiny_gltf.h>
+
+constexpr int DUMMY_COLOR_TEX_INDEX = 0;
+constexpr int DUMMY_NORMAL_TEX_INDEX = 1;
+constexpr int DUMMY_METALROUGH_TEX_INDEX = 2;
+
+enum L_TEXTURE_TYPE {
+    L_RGB,
+    L_UNORM
+};
 
 static std::string getFileExtension(const std::string& FileName) {
     if (FileName.find_last_of(".") != std::string::npos)
@@ -55,25 +65,14 @@ struct GltfNode {
     }
 };
 
-struct GltfTexture {
-    uint32_t component;
-    uint32_t width;
-    uint32_t height;
-
-    std::string texName;
-
-    std::vector<unsigned char> textureData;
-};
-
 struct GltfMesh {
     std::string meshName;
     uint32_t numNodes = 0;
 
     std::vector<GltfNode*> parentNodes;
 
-    // materials and textures
     std::vector<pt::Material> materials;
-    std::vector<GltfTexture> textures;
+    std::vector<pt::Texture> textures;
 };
 
 namespace gltfload {

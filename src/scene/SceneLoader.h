@@ -5,6 +5,7 @@
 
 #include <scene/Scene.h>
 #include "GltfUtils.h"
+#include <stb_image.h>
 
 namespace pt
 {

@@ -15,6 +15,7 @@ namespace pt::vk
         bool shaderExecutionReorder = false; // VK_EXT_/NV_ray_tracing_invocation_reorder (extension present)
         bool memoryBudget = false; // VK_EXT_memory_budget
         bool debugUtils = false; // VK_EXT_debug_utils
+        float maxAnisotropy = 1.f;
 
         VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtPipeline{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR };
         VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStruct{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR };
