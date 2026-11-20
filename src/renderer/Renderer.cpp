@@ -24,7 +24,7 @@ Renderer::Renderer(vk::Context& ctx, Extent2D extent, std::filesystem::path shad
 	// global bindless descriptor set + one pipeline layout every pipeline uses (set 0 + pushConstants)
 	m_bindless = std::make_unique<vk::BindlessDescriptors>(ctx);
 	m_pipelineLayout = vk::createPipelineLayout(ctx, m_bindless->layout(), sizeof(gpu::PushConstants));
-	m_gpuScene = std::make_unique<GpuScene>(ctx);
+	m_gpuScene = std::make_unique<GpuScene>(ctx, *m_bindless.get());
 
 	// timeline semaphore (64bit counter that gpu increments when work finishes)
 	VkSemaphoreTypeCreateInfo timelineType{ VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO };
@@ -147,6 +147,10 @@ void Renderer::writeFrameUniforms(FrameData& f, Scene& scene, Extent2D extent, c
 	u.exposure = settings.exposure;
 	f.uniforms.upload(&u, sizeof(u));
 }
+
+void Renderer::uploadImage(u32 slot, VkImageView view, VkSampler sampler) {
+	m_bindless.get()->setTexture(slot, view, sampler);
+};
 
 bool Renderer::renderFrame(Scene& scene, const RenderSettings& settings)
 {

@@ -52,6 +52,8 @@ struct GpuMaterial {
     float  ior;
     float  transmission;
     int    baseColorTexture;   // -1 = none
+    int    normalTexture;
+    int    metallicRoughnessTexture;
 };
 
 // one entry per TLAS instance; InstanceID() (customIndex) indexes this table.

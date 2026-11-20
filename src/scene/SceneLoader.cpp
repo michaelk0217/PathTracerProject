@@ -74,10 +74,84 @@ Scene makeCornellBox() {
     return s;
 }
 
-std::optional<Scene> loadGltf(const std::filesystem::path& path) {
-    PT_UNIMPLEMENTED("loadGltf");
-    (void)path;
-    return std::nullopt;
+template <typename AddFunction>
+void addGLTFMeshToScene(GltfNode* currentNode, Scene* scene, AddFunction&& add) {
+    glm::mat4 currentMatrix = currentNode->getMatrix();
+    for (auto p : currentNode->primitives) {
+        Mesh currentMesh;
+        currentMesh.vertices = std::move(p.vertices);
+        currentMesh.indices = std::move(p.indices);
+        currentMesh.materialIndex = p.materialIndex;
+        add(currentMesh, currentMatrix);
+    }
+
+    for (auto child : currentNode->children) {
+        addGLTFMeshToScene(child, scene, std::forward<AddFunction>(add));
+    }
+}
+
+pt::Texture loadDummyTexture(const std::string& filepath, VkFormat format) {
+    pt::Texture tex;
+    int texWidth = 0;
+    int texHeight = 0;
+    int texChannels = 0;
+    const std::string imagePath = (std::filesystem::path(PT_DUMMY_IMAGES_DIR) / filepath).string();
+
+    // AI CODE
+    std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> decoded(
+        stbi_load(imagePath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha),
+        stbi_image_free);
+
+    if (texWidth <= 0 || texHeight <= 0 ||
+        static_cast<size_t>(texWidth) >
+        std::numeric_limits<size_t>::max() / 4 / static_cast<size_t>(texHeight)) {
+        throw std::runtime_error("invalid dimensions for dummy image " + imagePath);
+    }
+
+    const size_t byteCount = static_cast<size_t>(texWidth) * texHeight * 4;
+    // 
+
+    tex.width = texWidth;
+    tex.height = texHeight;
+    tex.format = format;
+    tex.pixels.assign(decoded.get(), decoded.get() + byteCount);
+    tex.mipLevels = 1;
+    tex.sampler.magFilter = VK_FILTER_NEAREST;
+    tex.sampler.minFilter = tex.sampler.magFilter;
+    tex.sampler.wrapU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    tex.sampler.wrapV = tex.sampler.wrapU;
+
+    return tex;
+}
+
+Scene loadGltf(const std::string& path) {
+     Scene s;
+     
+     auto add = [&](Mesh m, glm::mat4 matrix) { s.addInstance(s.addMesh(std::move(m)), matrix); };
+
+     GltfMesh* mesh = gltfload::loadGLTFFile(path);
+     for (auto node : mesh->parentNodes) {
+         addGLTFMeshToScene(node, &s, add);
+     }
+
+     s.textures.push_back(loadDummyTexture("dummyColor.png", VK_FORMAT_R8G8B8A8_SRGB));
+     s.textures.push_back(loadDummyTexture("dummyNormal.png", VK_FORMAT_R8G8B8A8_SRGB));
+     s.textures.push_back(loadDummyTexture("dummyMetallicRoughness.png", VK_FORMAT_R8G8B8A8_SRGB));
+
+     for (auto& tex : mesh->textures) {
+         s.textures.push_back(std::move(tex));
+     }
+
+     for (auto& m : mesh->materials) {
+         s.addMaterial(m);
+     }
+     
+     s.camera.position = { 0.0f, 1.0f, 3.4f };
+     s.camera.yaw = -90.0f;
+     s.camera.pitch = 0.0f;
+     s.camera.verticalFovDeg = 40.0f;
+     s.markDirty(DirtyAll);
+     return s;
 }
 
 } // namespace pt

@@ -25,7 +25,8 @@ constexpr VkBufferUsageFlags kGeometryUsage =
     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 }
 
-GpuScene::GpuScene(const vk::Context& ctx) : m_ctx(ctx) {};
+// GpuScene::GpuScene(const vk::Context& ctx) : m_ctx(ctx) {};
+GpuScene::GpuScene(const vk::Context& ctx, vk::BindlessDescriptors& bindless) : m_ctx(ctx), m_bindless(bindless) {};
 
 GpuScene::~GpuScene()
 {
@@ -53,6 +54,8 @@ bool GpuScene::sync(Scene& scene)
         log::info("GpuScene: {} meshes, {} instances, {} materials", meshCount(),
             scene.instances.size(), scene.materials.size());
     }
+
+    if (dirty & DirtyTextures) uploadTextures(scene);
 
     scene.clearDirty();
     return true;
@@ -100,6 +103,8 @@ void GpuScene::uploadMaterials(const Scene& scene)
         g.ior = m.ior;
         g.transmission = m.transmission;
         g.baseColorTexture = m.baseColorTexture;
+        g.normalTexture = m.normalTexture;
+        g.metallicRoughnessTexture = m.metallicRoughnessTexture;
         mats.push_back(g);
     }
     m_materials = makeUploadBuffer(m_ctx, mats, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, "Materials");
@@ -200,5 +205,30 @@ void GpuScene::buildTlas(const Scene& scene)
     m_tlasChanged = true;
     log::info("GpuScene: built TLAS ({} instances, {:.1f} KB)", instances.size(),
         double(m_tlas.buffer.size()) / 1024.0);
+}
+
+void GpuScene::uploadTextures(const Scene& scene) {
+    m_samplers.reserve(scene.textures.size());
+    for (auto& tex : scene.textures) {
+        vk::Image2D image = vk::Image2D(m_ctx, Extent2D{ .width = tex.width, .height = tex.height }, tex.format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "texture_image");
+        image.uploadFromPixelData(m_ctx, (void*) tex.pixels.data());
+        m_textures.push_back(std::move(image));
+
+        // in theory, sampler should be cached. but whatever, we only have like 5 textures rn
+        // TODO: CACHE THEM LOOOOL
+        pt::vk::Sampler::SamplerInfo s{};
+        s.addressMode = tex.sampler.wrapU;
+        s.maxAniso = m_ctx.caps.maxAnisotropy;
+        s.mipLevels = tex.mipLevels;
+
+        m_samplers.emplace_back();
+        m_samplers.back().createSampler(m_ctx, s);
+    }
+
+    u32 slotIndex = 0;
+    for (auto& t : m_textures) {
+        m_bindless.setTexture(slotIndex, t.view(), m_samplers[slotIndex].getSampler());
+        slotIndex++;
+    }
 }
 }

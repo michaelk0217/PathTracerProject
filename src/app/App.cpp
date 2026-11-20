@@ -30,8 +30,9 @@ App::App()
 
     m_renderer = std::make_unique<Renderer>(*m_ctx, m_window->framebufferExtent(), shaderDir, m_settings.vsync);
     
-    m_scene = makeCornellBox();
+    // m_scene = makeCornellBox();
 
+    m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/sponza/Sponza.gltf");
 }
 
 App::~App()

@@ -4,11 +4,13 @@
 #include <optional>
 
 #include <scene/Scene.h>
+#include "GltfUtils.h"
+#include <stb_image.h>
 
 namespace pt
 {
 // procedural cornell box for lightweight reference scene (ai generated)
 Scene makeCornellBox();
 
-std::optional<Scene> loadGltf(const std::filesystem::path& path);
+Scene loadGltf(const std::string& path);
 }

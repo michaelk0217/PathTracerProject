@@ -6,6 +6,9 @@
 #include <shared/GpuStructs.h>
 #include <vk/AccelStruct.h>
 #include <vk/Resources.h>
+#include <vk/Bindless.h>
+
+#include "vk/Sampler.h"
 
 namespace pt
 {
@@ -14,7 +17,8 @@ namespace vk { class Context; }
 class GpuScene : NonCopyable
 {
 public: 
-	explicit GpuScene(const vk::Context& ctx);
+	// explicit GpuScene(const vk::Context& ctx);
+	explicit GpuScene(const vk::Context& ctx, vk::BindlessDescriptors& bindless);
 	~GpuScene();
 
 
@@ -34,6 +38,7 @@ public:
 
 
 private:
+	void uploadTextures(const Scene& scene);
 	void uploadGeometry(const Scene& scene); // vert, indices, per-mesh offsets
 	void uploadMaterials(const Scene& scene);
 	void uploadMeshInfos(const Scene& scene); // one GpuMeshInfo per instance
@@ -56,6 +61,10 @@ private:
 	std::vector<vk::AccelStruct> m_blas; // one per mesh
 	vk::AccelStruct m_tlas;
 	bool m_tlasChanged = false;
+
+	vk::BindlessDescriptors& m_bindless;
+	std::vector<vk::Image2D> m_textures;
+	std::vector<pt::vk::Sampler> m_samplers;
 };
 
 

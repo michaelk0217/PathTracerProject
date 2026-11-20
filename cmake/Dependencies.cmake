@@ -168,6 +168,16 @@ if(PT_WITH_IMGUI)
     set_target_properties(imgui PROPERTIES FOLDER "ThirdParty")
 endif()
 
+# --- TINYGLTF ---------------------------------------------------------------
+add_library(tinygltf STATIC ${PROJECT_SOURCE_DIR}/third_party/tinygltf/tinygltf_impl.cpp)
+target_include_directories(tinygltf SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/third_party/tinygltf)
+target_compile_features(tinygltf PUBLIC cxx_std_17)
+set_target_properties(tinygltf PROPERTIES FOLDER "ThirdParty")
+if(MSVC)
+    target_compile_options(tinygltf PRIVATE /W0)
+endif()
+add_library(third_party::tinygltf ALIAS tinygltf)
+
 # --- Summary ----------------------------------------------------------------
 message(STATUS "  volk : ${_volk_kind} (${PT_VOLK_INCLUDE_DIR})")
 message(STATUS "  VMA  : ${PT_VMA_INCLUDE_DIR}")

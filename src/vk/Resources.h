@@ -70,6 +70,9 @@ public:
 	// Records sync2 barrier from traced state to "next"
 	void transition(VkCommandBuffer cmd, const ImageState& next);
 
+	void generateMipmaps(VkCommandBuffer& commandBuffer);
+	void uploadFromPixelData(const Context& ctx, void* data);
+
 	VkImage handle() const { return m_image; }
 	VkImageView view() const { return m_view; }
 	VkFormat format() const { return m_format; }
@@ -85,6 +88,7 @@ private:
 	VkFormat m_format = VK_FORMAT_UNDEFINED;
 	Extent2D m_extent{};
 	ImageState m_state{};
+	u32 m_mipLevels = 1;
 };
 
 // Common destination states:
