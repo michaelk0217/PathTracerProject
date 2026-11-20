@@ -50,7 +50,7 @@ struct SamplerDesc
 
 struct Texture
 {
-	u32 width, height;
+	u32 width = 0, height = 0;
 	u32 mipLevels = 1;
 	std::vector<u8> pixels;
 	SamplerDesc sampler;

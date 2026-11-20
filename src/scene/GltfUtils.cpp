@@ -217,18 +217,18 @@ namespace gltfload {
                 material.baseColor = glm::make_vec3(gltfMat.values["baseColorFactor"].ColorFactor().data());
             }
             if (gltfMat.values.find("baseColorTexture") != gltfMat.values.end()) {
-                material.baseColorTexture = textureIndices[gltfMat.values["baseColorTexture"].TextureIndex()] + 2; // +2 for the three dummy images loaded at first
+                material.baseColorTexture = textureIndices[gltfMat.values["baseColorTexture"].TextureIndex()] + 3; // +3 for the three dummy images loaded at first
                 // imageIsSRGB.insert(material.baseColorTexture);
             }
             else { material.baseColorTexture = DUMMY_COLOR_TEX_INDEX; }
 
             if (gltfMat.additionalValues.find("normalTexture") != gltfMat.additionalValues.end()) {
-                material.normalTexture = textureIndices[gltfMat.additionalValues["normalTexture"].TextureIndex()];
+                material.normalTexture = textureIndices[gltfMat.additionalValues["normalTexture"].TextureIndex()] + 3;
             }
             else { material.normalTexture = DUMMY_NORMAL_TEX_INDEX; }
 
             if (gltfMat.values.find("metallicRoughnessTexture") != gltfMat.values.end()) {
-                material.metallicRoughnessTexture = textureIndices[gltfMat.values["metallicRoughnessTexture"].TextureIndex()];
+                material.metallicRoughnessTexture = textureIndices[gltfMat.values["metallicRoughnessTexture"].TextureIndex()] + 3;
             }
             else { material.metallicRoughnessTexture = DUMMY_METALROUGH_TEX_INDEX; }
 

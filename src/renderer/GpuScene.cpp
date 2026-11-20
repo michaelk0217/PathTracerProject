@@ -103,6 +103,8 @@ void GpuScene::uploadMaterials(const Scene& scene)
         g.ior = m.ior;
         g.transmission = m.transmission;
         g.baseColorTexture = m.baseColorTexture;
+        g.normalTexture = m.normalTexture;
+        g.metallicRoughnessTexture = m.metallicRoughnessTexture;
         mats.push_back(g);
     }
     m_materials = makeUploadBuffer(m_ctx, mats, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, "Materials");

@@ -32,7 +32,7 @@ App::App()
     
     // m_scene = makeCornellBox();
 
-    m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/sibenik.glb");
+    m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/sponza/Sponza.gltf");
 }
 
 App::~App()
