@@ -12,7 +12,7 @@ Some Design/Architecture choices (Bindless descriptor architecture and Scene<===
 
 A real-time **Vulkan hardware ray tracer** written in C++20 and **Slang**. The end goal is a renderer that runs either **Monte Carlo path tracing** or **ReSTIR**, each with an optional **spectral** mode. This README describes the codebase **as it is today**: the ray tracing foundation those techniques will be built on.
  
-> **Current state:** a Cornell box is uploaded to the GPU, acceleration structures (BLAS/TLAS) are built, and a ray tracing pipeline shoots **one primary ray per pixel** and shows the **surface normal** (or albedo) of what it hits. The result is tonemapped and presented. The camera can fly around. Bounces, lighting and the actual rendering techniques are the next steps (see [Extending the renderer](#12-extending-the-renderer)).
+> **Current state:** The ray tracer displays textured Sponza and supports Monte Carlo direct lighting in Sponza and Cornell. Sponza also supports a single directional sun. The sample-count comparisons in both scenes use a square area light. Shadow visibility and indirect bounces are future work.
  
 ---
  
@@ -62,6 +62,16 @@ cmake --preset vs2026        :: Visual Studio 2026   (or: cmake --preset vs2022)
 ```
 Then open **`build\vs2026\PathTracer.slnx`** (VS 2022: `build\vs2022\PathTracer.sln`). `PathTracer` is already the startup project, so press **F5**.
  
+Launch with `--samples COUNT` for the Sponza atrium lighting comparison or add `--cornell` for the Cornell box. Both accept 1 to 1024 light samples per pixel. `--sponza` and `--cornell` default to 16. Use `--sun` or `--sponza --sun` for a single directional sun from the same atrium camera. The sun has a fixed direction and takes no sample-count argument. Launching without arguments opens the original Sponza texture preview.
+
+```powershell
+.\build\vs2026\bin\Debug\PathTracer.exe --sun
+.\build\vs2026\bin\Debug\PathTracer.exe --samples 1
+.\build\vs2026\bin\Debug\PathTracer.exe --samples 16
+.\build\vs2026\bin\Debug\PathTracer.exe --cornell --samples 1
+.\build\vs2026\bin\Debug\PathTracer.exe --cornell --samples 16
+```
+
 | CMake option | Default | Meaning |
 |---|---|---|
 | `PT_ENABLE_VALIDATION` | `ON` | Enable Vulkan validation layers + debug messages |
@@ -94,17 +104,7 @@ Then open **`build\vs2026\PathTracer.slnx`** (VS 2022: `build\vs2022\PathTracer.
 | **Left Shift** | Move 4× faster |
 | **Esc** or close the window | Quit |
  
-**What you should see:** a Cornell box (open toward the camera) shaded by **surface normal**, where color = `normal × 0.5 + 0.5`:
- 
-| Surface | Normal | Color |
-|---|---|---|
-| Floor, top of boxes | +Y | pale green |
-| Ceiling | −Y | magenta |
-| Back wall, box fronts | +Z | lavender |
-| Left wall | +X | pink |
-| Right wall | −X | teal |
- 
-Black around the box is where rays hit nothing. The colors look pastel because they pass through the tonemapper.
+The default Sponza preview starts near a blue curtain. With `--samples`, the camera looks along the atrium under an added area light. In Cornell, the ceiling panel illuminates the colored walls and the tall box. Keep the camera still to compare noise at different sample counts.
  
 ---
  
@@ -289,7 +289,7 @@ Current contents:
 | `GpuVertex` | position, normal, uv | 32 |
 | `GpuMaterial` | baseColor, roughness, emission, metallic, ior, transmission, baseColorTexture | 44 |
 | `GpuMeshInfo` | vertices*, indices*, materialIndex, triangleCount | 24 |
-| `FrameUniforms` | viewInverse, projInverse, cameraPosition, maxBounces, exposure | 148 |
+| `FrameUniforms` | viewInverse, projInverse, cameraPosition, maxBounces, exposure, lightMaterial, lightSampleCount, lightPosition, lightWidth, directionToSun, sunIrradiance | 196 |
 | `PushConstants` | frame*, meshes*, materials*, extent | 32 (limit: 128) |
 | constants | `kSlotAccumulation = 0` (HDR output image), `kSlotDisplay = 1` | |
  
@@ -455,6 +455,7 @@ The foundation is in place: scene on the GPU, acceleration structures, ray traci
 ---
  
 ## 14. Further reading
+- Nathan Reed, [Hash Functions for GPU Rendering](https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/) (PCG generator used by `nextRandom()` for light sampling)
 - Vulkan specification and guide: <https://docs.vulkan.org>
 - Vulkan SDK (downloads, release notes, Vulkan Configurator): <https://vulkan.lunarg.com>
 - Slang language and documentation: <https://shader-slang.org>

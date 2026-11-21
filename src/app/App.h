@@ -13,10 +13,12 @@ namespace pt
 namespace vk { class Context; }
 class Renderer;
 
+enum class StartupScene { SponzaTextures, SponzaLit, SponzaSun, Cornell };
+
 class App : NonCopyable
 {
 public:
-	App();
+	explicit App(StartupScene scene = StartupScene::SponzaTextures, RenderSettings settings = {});
 	~App();
 	int run();
 

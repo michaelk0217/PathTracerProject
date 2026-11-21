@@ -75,6 +75,12 @@ struct FrameUniforms {
     float3   cameraPosition;
     uint     maxBounces;
     float    exposure;
+    int      lightMaterial;
+    uint     lightSampleCount;
+    float3   lightPosition;
+    float    lightWidth;
+    float3   directionToSun;
+    float3   sunIrradiance;
 };
 
 struct PushConstants {

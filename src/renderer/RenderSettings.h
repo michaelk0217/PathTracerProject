@@ -8,6 +8,7 @@ namespace pt
 struct RenderSettings
 {
 	u32 maxBounces = 8;
+	u32 lightSampleCount = 16;
 	float exposure = 1.0f;
 	bool vsync = true;
 };

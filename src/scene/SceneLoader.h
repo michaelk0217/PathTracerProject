@@ -11,6 +11,7 @@ namespace pt
 {
 // procedural cornell box for lightweight reference scene (ai generated)
 Scene makeCornellBox();
+void setUpSponzaLighting(Scene& scene, bool useSun);
 
 Scene loadGltf(const std::string& path);
 }

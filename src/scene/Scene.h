@@ -81,6 +81,11 @@ public:
 	std::vector<Instance> instances;
 	std::vector<Texture> textures;
 	Camera camera;
+	i32 lightMaterial = -1;
+	vec3 lightPosition{0.0f};
+	float lightWidth = 0.0f;
+	vec3 directionToSun{0.0f};
+	vec3 sunIrradiance{0.0f};
 
 	void markDirty(u32 flags) { m_dirty |= flags; }
 	u32 dirtyFlags() const { return m_dirty; }

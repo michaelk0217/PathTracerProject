@@ -145,6 +145,12 @@ void Renderer::writeFrameUniforms(FrameData& f, Scene& scene, Extent2D extent, c
 	u.cameraPosition = scene.camera.position;
 	u.maxBounces = settings.maxBounces;
 	u.exposure = settings.exposure;
+	u.lightMaterial = scene.lightMaterial;
+	u.lightPosition = scene.lightPosition;
+	u.lightWidth = scene.lightWidth;
+	u.directionToSun = scene.directionToSun;
+	u.sunIrradiance = scene.sunIrradiance;
+	u.lightSampleCount = settings.lightSampleCount;
 	f.uniforms.upload(&u, sizeof(u));
 }
 

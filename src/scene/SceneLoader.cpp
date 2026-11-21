@@ -46,15 +46,37 @@ Mesh makeBox(const char* name, vec3 mn, vec3 mx, u32 material) {
     return box;
 }
 
+// AI-assisted setup for the square light shared by both test scenes
+void addCeilingLight(Scene& scene, vec3 center, float width, vec3 emission) {
+    const u32 material = scene.addMaterial({ .name = "light", .baseColor = vec3(0.0f), .emission = emission });
+    const vec3 corner = center - vec3(width * 0.5f, 0.0f, width * 0.5f);
+    scene.addInstance(scene.addMesh(makeQuad("light", corner, {width, 0, 0}, {0, 0, width}, material)));
+    scene.lightMaterial = static_cast<i32>(material);
+    scene.lightPosition = center;
+    scene.lightWidth = width;
+}
+
 } // namespace
+
+void setUpSponzaLighting(Scene& scene, bool useSun) {
+    if (useSun) {
+        // AI-assisted sun setup with the direction pointing from the surface toward the sun
+        scene.directionToSun = glm::normalize(vec3(-0.48f, 1.0f, -0.32f));
+        scene.sunIrradiance = {5.2f, 4.9f, 4.4f};
+    } else {
+        addCeilingLight(scene, {-2.0f, 6.8f, -0.3f}, 4.0f, {36.0f, 34.0f, 31.0f});
+    }
+    scene.camera.position = {-8.4f, 1.7f, -0.15f};
+    scene.camera.yaw = 0.0f;
+    scene.camera.pitch = 6.0f;
+    scene.camera.verticalFovDeg = 55.0f;
+}
 
 Scene makeCornellBox() {
     Scene s;
     const u32 white = s.addMaterial({ .name = "white", .baseColor = {0.73f, 0.73f, 0.73f} });
     const u32 red = s.addMaterial({ .name = "red", .baseColor = {0.65f, 0.05f, 0.05f} });
     const u32 green = s.addMaterial({ .name = "green", .baseColor = {0.12f, 0.45f, 0.15f} });
-    const u32 light = s.addMaterial({ .name = "light", .baseColor = vec3(0.0f), .emission = {17.0f, 12.0f, 4.0f} });
-    
 
     // Room spans [-1,1] x [0,2] x [-1,1], open towards +Z (camera side).
     auto add = [&](Mesh m) { s.addInstance(s.addMesh(std::move(m))); };
@@ -63,7 +85,7 @@ Scene makeCornellBox() {
     add(makeQuad("back", { -1, 0, -1 }, { 2, 0, 0 }, { 0, 2, 0 }, white));
     add(makeQuad("left", { -1, 0, -1 }, { 0, 2, 0 }, { 0, 0, 2 }, red));
     add(makeQuad("right", { 1, 0, -1 }, { 0, 0, 2 }, { 0, 2, 0 }, green));
-    add(makeQuad("light", { -0.25f, 1.98f, -0.25f }, { 0.5f, 0, 0 }, { 0, 0, 0.5f }, light));
+    addCeilingLight(s, {0.0f, 1.98f, 0.0f}, 0.5f, {17.0f, 12.0f, 4.0f});
     add(makeBox("tallBox", { -0.6f, 0.0f, -0.6f }, { -0.1f, 1.2f, -0.1f }, white));
 
     s.camera.position = { 0.0f, 1.0f, 3.4f };

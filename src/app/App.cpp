@@ -11,7 +11,7 @@
 
 namespace pt
 {
-App::App()
+App::App(StartupScene scene, RenderSettings settings) : m_settings(settings)
 {
     pt::Window::Desc windowDesc{};
     m_window = std::make_unique<Window>(windowDesc);
@@ -30,9 +30,14 @@ App::App()
 
     m_renderer = std::make_unique<Renderer>(*m_ctx, m_window->framebufferExtent(), shaderDir, m_settings.vsync);
     
-    // m_scene = makeCornellBox();
-
-    m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/sponza/Sponza.gltf");
+    if (scene == StartupScene::Cornell) {
+        m_scene = makeCornellBox();
+    } else {
+        m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/sponza/Sponza.gltf");
+        if (scene != StartupScene::SponzaTextures) {
+            setUpSponzaLighting(m_scene, scene == StartupScene::SponzaSun);
+        }
+    }
 }
 
 App::~App()

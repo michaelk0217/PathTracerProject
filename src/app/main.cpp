@@ -14,9 +14,53 @@
 #include <SDL3/SDL_main.h>
 #include "App.h"
 
-int main(int, char**) {
+#include <charconv>
+#include <cstdio>
+#include <cstdlib>
+#include <string_view>
 
-    pt::App app{};
+int main(int argc, char** argv) {
+    pt::StartupScene scene = pt::StartupScene::SponzaTextures;
+    bool samplesSpecified = false;
+    bool useSun = false;
+    pt::RenderSettings settings;
+    for (int i = 1; i < argc; ++i) {
+        const std::string_view arg = argv[i];
+        if (arg == "--cornell" || arg == "--sponza") {
+            const auto requested = arg == "--cornell" ? pt::StartupScene::Cornell : pt::StartupScene::SponzaLit;
+            if (scene != pt::StartupScene::SponzaTextures && scene != requested) {
+                std::fputs("Choose either --sponza or --cornell\n", stderr);
+                return EXIT_FAILURE;
+            }
+            scene = requested;
+        } else if (arg == "--sun") {
+            useSun = true;
+        } else if (arg == "--samples" && i + 1 < argc) {
+            const std::string_view value = argv[++i];
+            const char* end = value.data() + value.size();
+            const auto result = std::from_chars(value.data(), end, settings.lightSampleCount);
+            if (result.ec != std::errc{} || result.ptr != end ||
+                settings.lightSampleCount == 0 || settings.lightSampleCount > 1024) {
+                std::fputs("--samples expects a whole number from 1 to 1024\n", stderr);
+                return EXIT_FAILURE;
+            }
+            samplesSpecified = true;
+        } else {
+            std::fputs("Usage: PathTracer [--sponza | --cornell] [--sun | --samples COUNT]\n", stderr);
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (useSun) {
+        if (scene == pt::StartupScene::Cornell || samplesSpecified) {
+            std::fputs("--sun is for Sponza and uses a single fixed light direction; omit --cornell and --samples\n", stderr);
+            return EXIT_FAILURE;
+        }
+        scene = pt::StartupScene::SponzaSun;
+    } else if (samplesSpecified && scene == pt::StartupScene::SponzaTextures) {
+        scene = pt::StartupScene::SponzaLit;
+    }
+    pt::App app{scene, settings};
     return app.run();
 
 
