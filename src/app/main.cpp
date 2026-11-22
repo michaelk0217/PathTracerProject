@@ -22,7 +22,7 @@
 int main(int argc, char** argv) {
     pt::StartupScene scene = pt::StartupScene::SponzaTextures;
     bool samplesSpecified = false;
-    bool useSun = false;
+    bool useSun = true;
     pt::RenderSettings settings;
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
