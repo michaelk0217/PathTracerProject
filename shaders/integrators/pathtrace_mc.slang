@@ -12,7 +12,7 @@ struct HitPayload
 
 struct ShadowPayload
 {
-    uint visible;
+    bool hit;
 };
 
 static const float pi = 3.14159265;
@@ -43,14 +43,22 @@ float3 estimateDirectLighting(HitPayload hit, float3 albedo, float3 emission, ui
         float distanceSquared = dot(toLight, toLight);
         if (distanceSquared <= 0.0) continue;
 
+        float lightDist = sqrt(distanceSquared);
         float3 direction = toLight * rsqrt(distanceSquared);
         float surfaceCos = max(dot(hit.normal, direction), 0.0);
         float lightCos = max(dot(lightNormal, -direction), 0.0);
 
         // Eyal's shadow check goes here before adding the sample
-        total += surfaceCos * lightCos / distanceSquared;
+        //shadowRay from surface to lightpoint
+        uint flags = RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
+        ShadowPayload shadowP;
+        shadowP.hit = true;
+        RayDesc shadowRay = makeRay(hit.position + .0001 * hit.normal, normalize(direction), .0001, lightDist -.0001);
+        TraceRay(gTlas, flags, 0xFF, 0, 0, 1, shadowRay, shadowP);
+        if (shadowP.hit == false){
+           total += surfaceCos * lightCos / distanceSquared;
+        }
     }
-
     // Uniform sampling gives each point a density of one over the light area
     return (albedo / pi) * emission * lightArea * (total / float(frame.lightSampleCount));
 }
@@ -105,7 +113,7 @@ void miss(inout HitPayload p)
 [shader("miss")]
 void shadowMiss(inout ShadowPayload p)
 {
-    p.visible = 1;
+    p.hit = false;
 }
 
 [shader("closesthit")]

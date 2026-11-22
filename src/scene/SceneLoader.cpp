@@ -64,7 +64,7 @@ void setUpSponzaLighting(Scene& scene, bool useSun) {
         scene.directionToSun = glm::normalize(vec3(-0.48f, 1.0f, -0.32f));
         scene.sunIrradiance = {5.2f, 4.9f, 4.4f};
     } else {
-        addCeilingLight(scene, {-2.0f, 6.8f, -0.3f}, 4.0f, {36.0f, 34.0f, 31.0f});
+        addCeilingLight(scene, {-2.0f, 6.8f, -0.3f}, 16.0f, {36.0f, 34.0f, 31.0f});
     }
     scene.camera.position = {-8.4f, 1.7f, -0.15f};
     scene.camera.yaw = 0.0f;
