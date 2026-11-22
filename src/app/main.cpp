@@ -22,7 +22,8 @@
 int main(int argc, char** argv) {
     pt::StartupScene scene = pt::StartupScene::SponzaTextures;
     bool samplesSpecified = false;
-    bool useSun = true;
+    constexpr bool sunByDefault = false;
+    bool sunRequested = false;
     pt::RenderSettings settings;
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
@@ -34,7 +35,7 @@ int main(int argc, char** argv) {
             }
             scene = requested;
         } else if (arg == "--sun") {
-            useSun = true;
+            sunRequested = true;
         } else if (arg == "--samples" && i + 1 < argc) {
             const std::string_view value = argv[++i];
             const char* end = value.data() + value.size();
@@ -51,14 +52,14 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (useSun) {
-        if (scene == pt::StartupScene::Cornell || samplesSpecified) {
+    if (scene == pt::StartupScene::Cornell || samplesSpecified) {
+        if (sunRequested) {
             std::fputs("--sun is for Sponza and uses a single fixed light direction; omit --cornell and --samples\n", stderr);
             return EXIT_FAILURE;
         }
+        if (scene == pt::StartupScene::SponzaTextures) scene = pt::StartupScene::SponzaLit;
+    } else if (sunByDefault || sunRequested) {
         scene = pt::StartupScene::SponzaSun;
-    } else if (samplesSpecified && scene == pt::StartupScene::SponzaTextures) {
-        scene = pt::StartupScene::SponzaLit;
     }
     pt::App app{scene, settings};
     return app.run();

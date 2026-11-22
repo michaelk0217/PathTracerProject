@@ -62,7 +62,7 @@ cmake --preset vs2026        :: Visual Studio 2026   (or: cmake --preset vs2022)
 ```
 Then open **`build\vs2026\PathTracer.slnx`** (VS 2022: `build\vs2022\PathTracer.sln`). `PathTracer` is already the startup project, so press **F5**.
  
-Launch with `--samples COUNT` for the Sponza atrium lighting comparison or add `--cornell` for the Cornell box. Both accept 1 to 1024 light samples per pixel. `--sponza` and `--cornell` default to 16. Use `--sun` or `--sponza --sun` for a single directional sun from the same atrium camera. The sun has a fixed direction and takes no sample-count argument. Launching without arguments opens the original Sponza texture preview.
+Press F5 or launch without arguments to open Sponza with the directional sun. `--sponza` and `--sun` also open this view. Use `--samples COUNT` to switch Sponza to the area light, or `--cornell` to use the Cornell box ceiling light. Both area lights accept 1 to 1024 samples per pixel. `--cornell` alone uses 16. An explicit `--sun` cannot be combined with `--cornell` or `--samples`.
 
 ```powershell
 .\build\vs2026\bin\Debug\PathTracer.exe --sun
@@ -104,7 +104,7 @@ Launch with `--samples COUNT` for the Sponza atrium lighting comparison or add `
 | **Left Shift** | Move 4× faster |
 | **Esc** or close the window | Quit |
  
-The default Sponza preview starts near a blue curtain. With `--samples`, the camera looks along the atrium under an added area light. In Cornell, the ceiling panel illuminates the colored walls and the tall box. Keep the camera still to compare noise at different sample counts.
+The default Sponza view looks down the sunlit atrium. With `--samples`, the same camera shows the atrium under an area light. In Cornell, the ceiling panel illuminates the colored walls and the tall box. Keep the camera still to compare noise at different sample counts.
  
 ---
  
