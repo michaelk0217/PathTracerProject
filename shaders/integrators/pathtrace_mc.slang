@@ -53,7 +53,8 @@ float3 estimateDirectLighting(HitPayload hit, float3 albedo, float3 emission, ui
         uint flags = RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
         ShadowPayload shadowP;
         shadowP.hit = true;
-        RayDesc shadowRay = makeRay(hit.position + .0001 * hit.normal, normalize(direction), .0001, lightDist -.0001);
+        float3 offsetOrigin = hit.position + .0001 * hit.normal;
+        RayDesc shadowRay = makeRay(offsetOrigin, normalize(direction), .0001, lightDist -.001);
         TraceRay(gTlas, flags, 0xFF, 0, 0, 1, shadowRay, shadowP);
         if (shadowP.hit == false){
            total += surfaceCos * lightCos / distanceSquared;
