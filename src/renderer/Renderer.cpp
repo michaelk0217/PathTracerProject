@@ -158,7 +158,7 @@ void Renderer::uploadImage(u32 slot, VkImageView view, VkSampler sampler) {
 	m_bindless.get()->setTexture(slot, view, sampler);
 };
 
-bool Renderer::renderFrame(Scene& scene, const RenderSettings& settings)
+bool Renderer::renderFrame(Scene& scene, const RenderSettings& settings, const OverlayFn& overlay)
 {
 	m_gpuScene->sync(scene);
 
@@ -233,7 +233,19 @@ bool Renderer::renderFrame(Scene& scene, const RenderSettings& settings)
 	vkCmdBindPipeline(f.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_tonemapPipeline);
 	vkCmdDispatch(f.cmd, gx, gy, 1);
 
-	recordBlitToSwapchain(f.cmd, imageIndex); // display -> swapchain;
+	recordBlitToSwapchain(f.cmd, imageIndex); // display -> swapchain
+
+	const VkImage swapImage = m_swapchain->image(imageIndex);
+	if (overlay)
+	{
+		vk::imageBarrier(f.cmd, swapImage, vk::states::TransferDst, vk::states::ColorAttachment);
+		overlay(f.cmd, m_swapchain->view(imageIndex), e);
+		vk::imageBarrier(f.cmd, swapImage, vk::states::ColorAttachment, vk::states::Present);
+	}
+	else
+	{
+		vk::imageBarrier(f.cmd, swapImage, vk::states::TransferDst, vk::states::Present);
+	}
 
 
 	//--------------------------------------------------------------------
@@ -276,13 +288,17 @@ bool Renderer::renderFrame(Scene& scene, const RenderSettings& settings)
 	return presented;
 }
 
+VkFormat Renderer::swapchainFormat() const { return m_swapchain->format(); }
+
+u32 Renderer::swapchainImageCount() const { return m_swapchain->imageCount(); }
+
 void Renderer::recordBlitToSwapchain(VkCommandBuffer cmd, u32 imageIndex)
 {
 	m_display.transition(cmd, vk::states::TransferSrc);
 
 	const VkImage dst = m_swapchain->image(imageIndex);
 	constexpr vk::ImageState kAcquired{ VK_IMAGE_LAYOUT_UNDEFINED, VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT, VK_ACCESS_2_NONE };
-	constexpr vk::ImageState kPresent{ VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE };
+	//constexpr vk::ImageState kPresent{ VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE };
 	
 	vk::imageBarrier(cmd, dst, kAcquired, vk::states::TransferDst);
 
@@ -304,7 +320,7 @@ void Renderer::recordBlitToSwapchain(VkCommandBuffer cmd, u32 imageIndex)
 	blit.filter = VK_FILTER_NEAREST;
 	vkCmdBlitImage2(cmd, &blit);
 
-	vk::imageBarrier(cmd, dst, vk::states::TransferDst, kPresent);
+	//vk::imageBarrier(cmd, dst, vk::states::TransferDst, kPresent);
 
 }
 

@@ -5,13 +5,16 @@
 #include <filesystem>
 #include <string_view>
 
+#include <imgui.h>
+
 #include "../vk/Context.h"
 #include "../renderer/Renderer.h"
 #include <scene/SceneLoader.h>
+#include <app/UiLayer.h>
 
 namespace pt
 {
-App::App(StartupScene scene, RenderSettings settings) : m_settings(settings)
+App::App(RenderSettings settings) : m_settings(settings)
 {
     pt::Window::Desc windowDesc{};
     m_window = std::make_unique<Window>(windowDesc);
@@ -30,29 +33,46 @@ App::App(StartupScene scene, RenderSettings settings) : m_settings(settings)
 
     m_renderer = std::make_unique<Renderer>(*m_ctx, m_window->framebufferExtent(), shaderDir, m_settings.vsync);
     
-    if (scene == StartupScene::Cornell) {
-        m_scene = makeCornellBox();
-    } else {
-        m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/sponza/Sponza.gltf");
-        if (scene != StartupScene::SponzaTextures) {
-            setUpSponzaLighting(m_scene, scene == StartupScene::SponzaSun);
-        }
-    }
+    m_ui = std::make_unique<UiLayer>(*m_ctx, m_window->sdlHandle(), m_renderer->swapchainFormat(), m_renderer->swapchainImageCount());
+    
+    m_window->setEventHook(&UiLayer::processEvent);
+
+    loadScene(m_sceneId, m_sponzaLighting);
 }
 
 App::~App()
 {
+    m_ctx->waitIdle();
+
+    m_window->setEventHook({});
+    m_ui.reset();
     m_renderer.reset();
     m_ctx.reset();
     m_window.reset();
+}
+
+void App::loadScene(SceneId id, SponzaLighting lighting)
+{
+    if (id == SceneId::CornellBox)
+    {
+        m_scene = makeCornellBox();
+    }
+    else
+    {
+        m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/sponza/Sponza.gltf");
+        if (lighting != SponzaLighting::AlbedoOnly)
+        {
+            setUpSponzaLighting(m_scene, lighting == SponzaLighting::Sun);
+        }
+    }
+    m_sceneId = id;
+    m_sponzaLighting = lighting;
 }
 
 int App::run()
 {
 	using clock = std::chrono::steady_clock;
 	auto last = clock::now();
-
-
 
     while (m_window->pollEvents()) {
         const auto now = clock::now();
@@ -62,9 +82,24 @@ int App::run()
         if (m_window->isMinimized()) continue;
         if (m_window->consumeResized()) m_renderer->resize(m_window->framebufferExtent());
 
-        updateCamera(dt);
+        if (m_reloadScene)
+        {
+            loadScene(m_sceneId, m_sponzaLighting);
+            m_reloadScene = false;
+        }
+
+        ImGuiIO& io = ImGui::GetIO();
+        if (m_window->input().rotating) io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+        else io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+
+        m_ui->beginFrame();
         drawUi();
-        m_renderer->renderFrame(m_scene, m_settings);
+        m_ui->endFrame();
+
+        if (!io.WantCaptureKeyboard) updateCamera(dt);
+
+        m_renderer->renderFrame(m_scene, m_settings,
+            [this](VkCommandBuffer cmd, VkImageView view, Extent2D extent) { m_ui->record(cmd, view, extent); });
     }
 
 	return EXIT_SUCCESS;
@@ -98,6 +133,44 @@ void App::updateCamera(float deltaTime)
 
 void App::drawUi()
 {
+    const ImGuiIO& io = ImGui::GetIO();
 
+    ImGui::SetNextWindowPos({ 12.0f, 12.0f }, ImGuiCond_FirstUseEver);
+    ImGui::Begin("Path Tracer", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+    // --- Performance ---
+    m_frameTimesMs[m_frameTimeHead] = io.DeltaTime * 1000.0f;
+    m_frameTimeHead = (m_frameTimeHead + 1) % m_frameTimesMs.size();
+
+    const Extent2D fb = m_window->framebufferExtent();
+    ImGui::Text("%.1f FPS  (%.2f ms)", io.Framerate, 1000.0f / io.Framerate);
+    ImGui::PlotLines("##frametimes", m_frameTimesMs.data(), int(m_frameTimesMs.size()), int(m_frameTimeHead),
+        "frame time (ms)", 0.0f, 33.3f, ImVec2(0.0f, 50.0f));
+    ImGui::Text("%u x %u%s", fb.width, fb.height, m_settings.vsync ? "  (vsync on: FPS capped)" : "");
+
+    // --- Scene ---
+    ImGui::SeparatorText("Scene");
+    int sceneIndex = int(m_sceneId);
+    const char* sceneNames[] = { "Cornell box", "Sponza" };
+    if (ImGui::Combo("Scene", &sceneIndex, sceneNames, IM_ARRAYSIZE(sceneNames))) {
+        m_sceneId = SceneId(sceneIndex);
+        m_reloadScene = true;
+    }
+
+    if (m_sceneId == SceneId::Sponza) {
+        int lighting = int(m_sponzaLighting);
+        bool changed = false;
+        changed |= ImGui::RadioButton("Albedo", &lighting, int(SponzaLighting::AlbedoOnly));   ImGui::SameLine();
+        changed |= ImGui::RadioButton("Area light", &lighting, int(SponzaLighting::CeilingLight)); ImGui::SameLine();
+        changed |= ImGui::RadioButton("Sun", &lighting, int(SponzaLighting::Sun));
+        if (changed) { m_sponzaLighting = SponzaLighting(lighting); m_reloadScene = true; }
+    }
+
+    if (m_scene.lightMaterial >= 0) {
+        const u32 minSamples = 1, maxSamples = 64;
+        ImGui::SliderScalar("Light samples", ImGuiDataType_U32, &m_settings.lightSampleCount, &minSamples, &maxSamples);
+    }
+
+    ImGui::End();
 }
 }

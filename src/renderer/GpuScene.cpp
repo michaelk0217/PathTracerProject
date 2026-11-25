@@ -39,7 +39,7 @@ bool GpuScene::sync(Scene& scene)
     const u32 dirty = scene.dirtyFlags();
     if (dirty == DirtyNone) return false;
 
-    if (dirty & (DirtyGeometry | DirtyMaterials | DirtyInstances)) m_ctx.waitIdle();
+    if (dirty & (DirtyGeometry | DirtyMaterials | DirtyInstances | DirtyTextures)) m_ctx.waitIdle();
     
     if (dirty & DirtyGeometry) { 
         uploadGeometry(scene);
@@ -208,6 +208,9 @@ void GpuScene::buildTlas(const Scene& scene)
 }
 
 void GpuScene::uploadTextures(const Scene& scene) {
+    m_textures.clear();
+    m_samplers.clear();
+
     m_samplers.reserve(scene.textures.size());
     for (auto& tex : scene.textures) {
         vk::Image2D image = vk::Image2D(m_ctx, Extent2D{ .width = tex.width, .height = tex.height }, tex.format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "texture_image");
