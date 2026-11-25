@@ -14,7 +14,14 @@ namespace pt
 {
 namespace
 {
-	constexpr vk::ImageState kComputeRead{ VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT };
+constexpr vk::ImageState kComputeRead{ VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT };
+}
+namespace
+{
+bool integratorSettingsChanged(const RenderSettings& a, const RenderSettings& b)
+{
+	return a.maxBounces != b.maxBounces || a.lightSampleCount != b.lightSampleCount;
+}
 }
 Renderer::Renderer(vk::Context& ctx, Extent2D extent, std::filesystem::path shaderDir, bool vsync)
 	: m_ctx(ctx), m_shaderDir(shaderDir)
@@ -100,6 +107,8 @@ void Renderer::createTargets(Extent2D extent)
 
 	m_bindless->setStorageImage(gpu::kSlotAccumulation, m_accumulation.view());
 	m_bindless->setStorageImage(gpu::kSlotDisplay, m_display.view());
+
+	m_resetAccumulation = true;
 }
 
 void Renderer::resize(Extent2D extent)
@@ -138,9 +147,23 @@ vk::RayTracingPipeline Renderer::loadRayTracing(const char* spvPath)
 void Renderer::writeFrameUniforms(FrameData& f, Scene& scene, Extent2D extent, const RenderSettings& settings)
 {
 	const float aspect = float(extent.width) / float(extent.height);
+	const mat4 viewInverse = glm::inverse(scene.camera.view());
+
+	if (viewInverse != m_lastViewInverse || integratorSettingsChanged(settings, m_lastSettings))
+	{
+		m_resetAccumulation = true;
+	}
+	m_lastViewInverse = viewInverse;
+	m_lastSettings = settings;
+
+	if (m_resetAccumulation)
+	{
+		m_accumulatedFrames = 0;
+		m_resetAccumulation = false;
+	}
 
 	gpu::FrameUniforms u{};
-	u.viewInverse = glm::inverse(scene.camera.view());
+	u.viewInverse = viewInverse;
 	u.projInverse = glm::inverse(scene.camera.projection(aspect));
 	u.cameraPosition = scene.camera.position;
 	u.maxBounces = settings.maxBounces;
@@ -151,7 +174,11 @@ void Renderer::writeFrameUniforms(FrameData& f, Scene& scene, Extent2D extent, c
 	u.directionToSun = scene.directionToSun;
 	u.sunIrradiance = scene.sunIrradiance;
 	u.lightSampleCount = settings.lightSampleCount;
+	u.frameIndex = static_cast<u32>(m_frameNumber);
+	u.accumulatedFrames = m_accumulatedFrames;
 	f.uniforms.upload(&u, sizeof(u));
+
+	++m_accumulatedFrames;
 }
 
 void Renderer::uploadImage(u32 slot, VkImageView view, VkSampler sampler) {
@@ -160,7 +187,7 @@ void Renderer::uploadImage(u32 slot, VkImageView view, VkSampler sampler) {
 
 bool Renderer::renderFrame(Scene& scene, const RenderSettings& settings, const OverlayFn& overlay)
 {
-	m_gpuScene->sync(scene);
+	if (m_gpuScene->sync(scene)) m_resetAccumulation = true;
 
 	if (m_gpuScene->consumeTlasChanged()) m_bindless->setTlas(m_gpuScene->tlas());
 

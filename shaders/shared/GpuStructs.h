@@ -70,17 +70,19 @@ struct GpuMeshInfo {
 // Everything a frame needs, passed as push constants (<= 128 bytes guaranteed).
 // Larger per-frame data goes into a FrameUniforms buffer referenced by pointer.
 struct FrameUniforms {
-    float4x4 viewInverse;
-    float4x4 projInverse;
-    float3   cameraPosition;
-    uint     maxBounces;
-    float    exposure;
-    int      lightMaterial;
-    uint     lightSampleCount;
-    float3   lightPosition;
-    float    lightWidth;
-    float3   directionToSun;
-    float3   sunIrradiance;
+    float4x4    viewInverse;
+    float4x4    projInverse;
+    float3      cameraPosition;
+    uint        maxBounces;
+    float       exposure;
+    int         lightMaterial;
+    uint        lightSampleCount;
+    float3      lightPosition;
+    float       lightWidth;
+    float3      directionToSun;
+    float3      sunIrradiance;
+    uint        frameIndex;
+    uint        accumulatedFrames;
 };
 
 struct PushConstants {

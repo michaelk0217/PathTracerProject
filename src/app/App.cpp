@@ -148,16 +148,24 @@ void App::drawUi()
         "frame time (ms)", 0.0f, 33.3f, ImVec2(0.0f, 50.0f));
     ImGui::Text("%u x %u%s", fb.width, fb.height, m_settings.vsync ? "  (vsync on: FPS capped)" : "");
 
+
+    // --- Accumulation ---
+    ImGui::Text("%u spp", m_renderer->accumulatedFrames());
+    ImGui::SameLine();
+    if (ImGui::Button("Reset")) m_renderer->resetAccumulation();
+
     // --- Scene ---
     ImGui::SeparatorText("Scene");
     int sceneIndex = int(m_sceneId);
     const char* sceneNames[] = { "Cornell box", "Sponza" };
-    if (ImGui::Combo("Scene", &sceneIndex, sceneNames, IM_ARRAYSIZE(sceneNames))) {
+    if (ImGui::Combo("Scene", &sceneIndex, sceneNames, IM_ARRAYSIZE(sceneNames))) 
+    {
         m_sceneId = SceneId(sceneIndex);
         m_reloadScene = true;
     }
 
-    if (m_sceneId == SceneId::Sponza) {
+    if (m_sceneId == SceneId::Sponza) 
+    {
         int lighting = int(m_sponzaLighting);
         bool changed = false;
         changed |= ImGui::RadioButton("Albedo", &lighting, int(SponzaLighting::AlbedoOnly));   ImGui::SameLine();
@@ -166,7 +174,8 @@ void App::drawUi()
         if (changed) { m_sponzaLighting = SponzaLighting(lighting); m_reloadScene = true; }
     }
 
-    if (m_scene.lightMaterial >= 0) {
+    if (m_scene.lightMaterial >= 0) 
+    {
         const u32 minSamples = 1, maxSamples = 64;
         ImGui::SliderScalar("Light samples", ImGuiDataType_U32, &m_settings.lightSampleCount, &minSamples, &maxSamples);
     }

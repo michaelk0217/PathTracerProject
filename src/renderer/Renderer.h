@@ -33,6 +33,9 @@ public:
     void uploadImage(u32 slot, VkImageView view, VkSampler sampler);
     void resize(Extent2D extent);
 
+    void resetAccumulation() { m_resetAccumulation = true; }
+    u32 accumulatedFrames() const { return m_accumulatedFrames; }
+
 private:
     // one per frame in flight.
     struct FrameData
@@ -71,6 +74,9 @@ private:
     VkSemaphore m_timeline = VK_NULL_HANDLE;
     u64         m_timelineValue = 0;
     u64         m_frameNumber = 0;
-
+    u32         m_accumulatedFrames = 0;
+    bool        m_resetAccumulation = false;
+    mat4        m_lastViewInverse{ 0.0f };
+    RenderSettings m_lastSettings{};
 };
 }

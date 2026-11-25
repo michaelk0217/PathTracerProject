@@ -20,6 +20,19 @@ static const float pi = 3.14159265;
 // Both panels face down into their scene
 static const float3 lightNormal = float3(0.0, -1.0, 0.0);
 
+// PCG hash (Jarzynski & Olano 2020, "Hash Functions for GPU Rendering")
+uint pcgHash(uint v)
+{
+    uint s = v * 747796405u + 2891336453u;
+    uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    return (w >> 22u) ^ w;
+}
+
+uint initRng(uint2 pixel, uint2 dims, uint frameIndex)
+{
+    return pcgHash(pixel.x + pixel.y * dims.x + pcgHash(frameIndex));
+}
+
 // PCG reference: Nathan Reed, Hash Functions for GPU Rendering
 float nextRandom(inout uint state)
 {
@@ -30,14 +43,14 @@ float nextRandom(inout uint state)
     return float(bits >> 8u) / 16777216.0;
 }
 
-float3 estimateDirectLighting(HitPayload hit, float3 albedo, float3 emission, uint seed, FrameUniforms frame)
+float3 estimateDirectLighting(HitPayload hit, float3 albedo, float3 emission, inout uint rng, FrameUniforms frame)
 {
     float lightArea = frame.lightWidth * frame.lightWidth;
     float total = 0.0;
 
     for (uint i = 0; i < frame.lightSampleCount; ++i) {
-        float x = nextRandom(seed) - 0.5;
-        float z = nextRandom(seed) - 0.5;
+        float x = nextRandom(rng) - 0.5;
+        float z = nextRandom(rng) - 0.5;
         float3 lightPoint = frame.lightPosition + float3(x, 0.0, z) * frame.lightWidth;
         float3 toLight = lightPoint - hit.position;
         float distanceSquared = dot(toLight, toLight);
@@ -71,7 +84,10 @@ void rayGen()
     uint2 dims  = DispatchRaysDimensions().xy;
     FrameUniforms frame = pc.frame[0];
 
-    RayDesc ray = primaryRay(frame, pixel, dims, float2(0.5, 0.5));
+    uint rng = initRng(pixel, dims, frame.frameIndex);
+
+    float2 jitter = float2(nextRandom(rng), nextRandom(rng));
+    RayDesc ray = primaryRay(frame, pixel, dims, jitter);
 
     HitPayload p;
     p.hitT = -1.0;
@@ -96,13 +112,20 @@ void rayGen()
             // The ceiling panel gives off light on the side facing the floor
             color = dot(lightNormal, -ray.Direction) > 0.0 ? material.emission : float3(0.0);
         } else {
-            uint seed = pixel.y * dims.x + pixel.x;
+            // uint seed = pixel.y * dims.x + pixel.x;
             float3 emission = pc.materials[frame.lightMaterial].emission;
-            color = estimateDirectLighting(p, albedo, emission, seed, frame);
+            color = estimateDirectLighting(p, albedo, emission, rng, frame);
         }
     }
 
-    gImages[kSlotAccumulation][pixel] = float4(color, 1.0);
+    // progressive accumulation: using averaging
+    float3 result = color;
+    if (frame.accumulatedFrames > 0)
+    {
+        float3 prev = gImages[kSlotAccumulation][pixel].rgb;
+        result = lerp(prev, color, 1.0 / float(frame.accumulatedFrames + 1));
+    }
+    gImages[kSlotAccumulation][pixel] = float4(result, 1.0);
 }
 
 [shader("miss")]
