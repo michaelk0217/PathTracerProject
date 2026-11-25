@@ -176,6 +176,7 @@ void Renderer::writeFrameUniforms(FrameData& f, Scene& scene, Extent2D extent, c
 	u.lightSampleCount = settings.lightSampleCount;
 	u.frameIndex = static_cast<u32>(m_frameNumber);
 	u.accumulatedFrames = m_accumulatedFrames;
+	u.skyRadiance = scene.skyRadiance;
 	f.uniforms.upload(&u, sizeof(u));
 
 	++m_accumulatedFrames;

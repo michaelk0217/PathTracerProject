@@ -83,6 +83,7 @@ struct FrameUniforms {
     float3      sunIrradiance;
     uint        frameIndex;
     uint        accumulatedFrames;
+    float3      skyRadiance;
 };
 
 struct PushConstants {

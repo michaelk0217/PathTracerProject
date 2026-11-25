@@ -86,6 +86,7 @@ public:
 	float lightWidth = 0.0f;
 	vec3 directionToSun{0.0f};
 	vec3 sunIrradiance{0.0f};
+	vec3 skyRadiance{ 0.0f };
 
 	void markDirty(u32 flags) { m_dirty |= flags; }
 	u32 dirtyFlags() const { return m_dirty; }

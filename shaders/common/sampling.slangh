@@ -1,0 +1,77 @@
+#pragma once
+
+static const float kPi = 3.14159265358979;
+
+// random numbers-----------
+uint pcgHash(uint v)
+{
+    uint s = v * 747796405u + 2891336453u;
+    uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    return (w >> 22u) ^ w;
+}
+
+uint initRng(uint2 pixel, uint2 dims, uint frameIndex)
+{
+    return pcgHash(pixel.x + pixel.y * dims.x + pcgHash(frameIndex));
+}
+
+// PCG reference: Nathan Reed, Hash Functions for GPU Rendering
+// ret [0, 1)
+float nextRandom(inout uint state)
+{
+    // PCG mixes the pixel seed so nearby pixels sample different spots
+    state = state * 747796405u + 2891336453u;
+    uint bits = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    bits ^= bits >> 22u;
+    return float(bits >> 8u) / 16777216.0;
+}
+
+float2 nextRandom2(inout uint state)
+{
+    float a = nextRandom(state);
+    float b = nextRandom(state);
+    return float2(a, b);
+}
+
+// directions-------------
+// Duff et al. 2017 "Building an Orthonormal Basis, Revisited"
+void buildOrthonormalBasis(float3 n, out float3 t, out float3 b)
+{
+    float sign = n.z >= 0.0 ? 1.0 : -1.0;
+
+    float a = -1.0 / (sign + n.z);
+    float c = n.x * n.y * a;
+    t = float3(1.0 + sign * n.x * a, sign * c, -sign * n.x);
+    b = float3(c, sign + n.y * n.y * a, -n.y);
+}
+
+// cosine weighted hemisphere around n
+// Malley's method pdf = cos(theta) / pi
+float3 sampleCosineHemisphere(float3 n, float2 u)
+{
+    float r = sqrt(u.x);
+    float phi = 2.0 * kPi * u.y;
+    float3 local = float3(r * cos(phi), r * sin(phi), sqrt(max(0.0, 1.0 - u.x)));
+    float3 t, b;
+    buildOrthonormalBasis(n, t, b);
+    return normalize(t * local.x + b * local.y + n * local.z);
+}
+
+// ray origins--------
+// Wachter & Binder, "A fast and robust method for avoiding self-intersection" (ray tracing gems ch6)
+// offset scales w magnitude of pos
+// using tmin = 0
+float3 offsetRayOrigin(float3 p, float3 ng)
+{
+    const float kOrigin = 1.0 / 32.0;
+    const float kFloatScale = 1.0 / 65536.0;
+    const float kIntScale = 256.0;
+
+    int3 o = int3(kIntScale * ng);
+    float3 pi = float3(asfloat(asint(p.x) + (p.x < 0.0 ? -o.x : o.x)),
+                        asfloat(asint(p.y) + (p.y < 0.0 ? -o.y : o.y)),
+                        asfloat(asint(p.z) + (p.z < 0.0 ? -o.z : o.z)));
+    return float3(abs(p.x) < kOrigin ? p.x + kFloatScale * ng.x : pi.x,
+                    abs(p.y) < kOrigin ? p.y + kFloatScale * ng.y : pi.y,
+                    abs(p.z) < kOrigin ? p.z + kFloatScale * ng.z : pi.z);
+}

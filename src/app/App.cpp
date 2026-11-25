@@ -180,6 +180,11 @@ void App::drawUi()
         ImGui::SliderScalar("Light samples", ImGuiDataType_U32, &m_settings.lightSampleCount, &minSamples, &maxSamples);
     }
 
+    const u32 minBounces = 0;
+    const u32 maxBounces = 16;
+    ImGui::SliderScalar("Max Bounces", ImGuiDataType_U32, &m_settings.maxBounces, &minBounces, &maxBounces);
+
+
     ImGui::End();
 }
 }
