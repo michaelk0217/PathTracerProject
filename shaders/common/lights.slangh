@@ -46,6 +46,7 @@ LightSample sampleLight(inout uint rng, uint lightCount)
     ls.position = b0 * L.p0 + b1 * L.p1 + (1.0 - b0 - b1) * L.p2;
     ls.normal = normalize(cross(L.p1 - L.p0, L.p2 - L.p0));
     ls.emission = L.emission;
+    if (lightCount == 0) return ls;
     ls.pdfArea = L.pmf / L.area;
     return ls;
 }

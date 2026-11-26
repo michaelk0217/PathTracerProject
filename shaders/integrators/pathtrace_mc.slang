@@ -104,6 +104,7 @@ float3 sampleEmissiveLights(Surface s, inout uint rng, uint sampleCount, FrameUn
     for (uint i = 0; i < sampleCount; ++i)
     {
         LightSample ls = sampleLight(rng, frame.lightCount);
+        if (ls.pdfArea <= 0.0) continue;
 
         float3 toLight = ls.position - origin;
         float dist2 = dot(toLight, toLight);
@@ -207,7 +208,7 @@ float3 sampleSun(Surface s, FrameUniforms frame)
 float3 directLighting(Surface s, inout uint rng, uint sampleCount, FrameUniforms frame)
 {
     float3 L = float3(0.0);
-    if (frame.lightCount >= 0)
+    if (frame.lightCount > 0)
     {
         L += sampleEmissiveLights(s, rng, sampleCount, frame);
     }
