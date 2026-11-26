@@ -57,10 +57,13 @@ void App::loadScene(SceneId id, SceneLighting lighting)
     {
         m_scene = makeCornellBox();
     }
-    else
+    else if (id == SceneId::Sponza)
     {
         m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/sponza/Sponza.gltf");
         setUpSponzaLighting(m_scene, lighting);
+    }
+    else if (id == SceneId::ZeroDay) {
+        m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/zero_day.glb");
     }
     m_sceneId = id;
     m_sponzaLighting = lighting;
@@ -116,7 +119,7 @@ void App::updateCamera(float deltaTime)
     bool moved = false;
     if (dir != vec3(0.0f))
     {
-        m_scene.camera.move(glm::normalize(dir), deltaTime * (in.fast ? 4.0f : 1.0f));
+        m_scene.camera.move(glm::normalize(dir), deltaTime * (in.fast ? 10.0f : 1.0f));
         moved = true;
     }
     if (in.mouseDelta != vec2(0.0f))
@@ -154,7 +157,7 @@ void App::drawUi()
     // --- Scene ---
     ImGui::SeparatorText("Scene");
     int sceneIndex = int(m_sceneId);
-    const char* sceneNames[] = { "Cornell box", "Sponza" };
+    const char* sceneNames[] = { "Cornell box", "Sponza", "ZeroDay"};
     if (ImGui::Combo("Scene", &sceneIndex, sceneNames, IM_ARRAYSIZE(sceneNames))) 
     {
         m_sceneId = SceneId(sceneIndex);

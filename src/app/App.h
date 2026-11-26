@@ -16,7 +16,7 @@ namespace vk { class Context; }
 class Renderer;
 class UiLayer;
 
-enum class SceneId : int {CornellBox, Sponza};
+enum class SceneId : int {CornellBox, Sponza, ZeroDay};
 //enum class SponzaLighting : int {AlbedoOnly, CeilingLight, Sun, ManyLights}; //moved to sceneloader with a name SceneLighting
 
 class App : NonCopyable
