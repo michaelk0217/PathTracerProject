@@ -234,13 +234,8 @@ namespace gltfload {
             }
             else { material.metallicRoughnessTexture = DUMMY_METALROUGH_TEX_INDEX; }
 
-            if (gltfMat.values.find("metallicFactor") != gltfMat.values.end()) {
-                material.metallic = (float)gltfMat.values["metallicFactor"].Factor();
-            }
-
-            if (gltfMat.values.find("roughnessFactor") != gltfMat.values.end()) {
-                material.roughness = (float)gltfMat.values["roughnessFactor"].Factor();
-            }
+            material.metallic = static_cast<float>(gltfMat.pbrMetallicRoughness.metallicFactor);
+            material.roughness = static_cast<float>(gltfMat.pbrMetallicRoughness.roughnessFactor);
 
             if (gltfMat.emissiveFactor.size() == 3)
             {
