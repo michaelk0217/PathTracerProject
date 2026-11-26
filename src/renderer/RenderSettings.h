@@ -11,6 +11,7 @@ struct RenderSettings
 	u32 lightSampleCount = 16;
 	float exposure = 1.0f;
 	u32 debugView = 0;
+	u32 tonemapper = 1;
 	bool vsync = true;
 };
 }

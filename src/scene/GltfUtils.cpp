@@ -247,6 +247,16 @@ namespace gltfload {
                 material.emission = glm::vec3(gltfMat.emissiveFactor[0], gltfMat.emissiveFactor[1], gltfMat.emissiveFactor[2]);
             }
 
+            // ai
+            if (gltfMat.emissiveTexture.index >= 0) {
+                const uint32_t image = textureIndices[gltfMat.emissiveTexture.index];
+                material.emissiveTexture = static_cast<uint32_t>(image) + 3;
+                srgbImages.insert(image);
+            }
+            auto strength = gltfMat.extensions.find("KHR_materials_emissive_strength");
+            if (strength != gltfMat.extensions.end() && strength->second.Has("emissiveStrength"))
+                material.emission *= static_cast<float>(strength->second.Get("emissiveStrength").GetNumberAsDouble());
+
             mesh->materials.push_back(material);
         }
 

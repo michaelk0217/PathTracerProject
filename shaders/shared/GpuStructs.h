@@ -54,6 +54,7 @@ struct GpuMaterial {
     int    baseColorTexture;   // -1 = none
     int    normalTexture;
     int    metallicRoughnessTexture;
+    int    emissiveTexture;
 };
 
 // one entry per TLAS instance; InstanceID() (customIndex) indexes this table.
@@ -93,6 +94,7 @@ struct FrameUniforms {
     uint        accumulatedFrames;
     float3      skyRadiance;
     uint        debugView;
+    uint        tonemapper;
 };
 
 struct PushConstants {

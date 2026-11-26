@@ -38,6 +38,7 @@ struct Material
 	i32 baseColorTexture = -1; // index into Scene::texturePaths, -1 = none
 	i32 normalTexture = -1;
 	i32 metallicRoughnessTexture = -1;
+	i32 emissiveTexture = -1;
 };
 
 struct SamplerDesc

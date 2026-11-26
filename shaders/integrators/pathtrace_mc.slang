@@ -76,6 +76,10 @@ Surface evaluateSurface(HitPayload p, FrameUniforms frame, float3 wo)
     s.bsdf.roughness = saturate(roughness);
     s.albedo = baseColor;
     s.emission = m.emission;
+    if (m.emissiveTexture >= 0)
+    {
+        s.emission *= gTextures[NonUniformResourceIndex(m.emissiveTexture)].SampleLevel(p.uv, 0).rgb;
+    }
     // s.isLight = frame.lightMaterial >= 0 && p.materialIndex == uint(frame.lightMaterial);
     s.isLight = any(m.emission > 0.0);
 

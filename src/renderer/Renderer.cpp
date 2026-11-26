@@ -176,6 +176,7 @@ void Renderer::writeFrameUniforms(FrameData& f, Scene& scene, Extent2D extent, c
 	u.accumulatedFrames = m_accumulatedFrames;
 	u.skyRadiance = scene.skyRadiance;
 	u.debugView = settings.debugView;
+	u.tonemapper = settings.tonemapper;
 	f.uniforms.upload(&u, sizeof(u));
 
 	++m_accumulatedFrames;

@@ -7,3 +7,4 @@ out/
 CMakeUserPresets.json
 imgui.ini
 assets/local/
+assets/scenes/zero_day.glb

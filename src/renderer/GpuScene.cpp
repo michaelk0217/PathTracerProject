@@ -23,6 +23,39 @@ vk::Buffer makeUploadBuffer(const vk::Context& ctx, const std::vector<T>& data, 
 
 constexpr VkBufferUsageFlags kGeometryUsage =
     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+
+
+    // ai generated
+// Nearest texel, repeat wrap, returned in LINEAR color (matching what the GPU sees for _SRGB formats).
+vec3 texelLinear(const Texture& t, vec2 uv)
+{
+    const float u = uv.x - std::floor(uv.x);
+    const float v = uv.y - std::floor(uv.y);
+    const u32 x = std::min(static_cast<u32>(u * t.width),  t.width  - 1);
+    const u32 y = std::min(static_cast<u32>(v * t.height), t.height - 1);
+    const u8* p = &t.pixels[(static_cast<size_t>(y) * t.width + x) * 4];
+
+    if (t.format != VK_FORMAT_R8G8B8A8_SRGB) return vec3(p[0], p[1], p[2]) / 255.0f;
+    auto toLinear = [](u8 c) {
+        const float s = c / 255.0f;
+        return s <= 0.04045f ? s / 12.92f : std::pow((s + 0.055f) / 1.055f, 2.4f);
+    };
+    return vec3(toLinear(p[0]), toLinear(p[1]), toLinear(p[2]));
+}
+
+// ai generated
+// Average of 16 stratified points over the triangle (4×4 grid in barycentric space, folded into the triangle).
+vec3 averageOverTriangle(const Texture& t, vec2 uv0, vec2 uv1, vec2 uv2)
+{
+    vec3 sum(0.0f);
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j) {
+            float b1 = (i + 0.5f) / 4.0f, b2 = (j + 0.5f) / 4.0f;
+            if (b1 + b2 > 1.0f) { b1 = 1.0f - b1; b2 = 1.0f - b2; }   // reflect into the triangle
+            sum += texelLinear(t, uv0 * (1.0f - b1 - b2) + uv1 * b1 + uv2 * b2);
+        }
+    return sum / 16.0f;
+}
 }
 
 // GpuScene::GpuScene(const vk::Context& ctx) : m_ctx(ctx) {};
@@ -48,7 +81,7 @@ bool GpuScene::sync(Scene& scene)
 
     if (dirty & DirtyMaterials) uploadMaterials(scene);
     if (dirty & (DirtyGeometry | DirtyInstances)) uploadMeshInfos(scene);
-    if (dirty & (DirtyGeometry | DirtyInstances | DirtyMaterials)) uploadLights(scene);
+    if (dirty & (DirtyGeometry | DirtyInstances | DirtyMaterials | DirtyTextures)) uploadLights(scene);
     if (dirty & (DirtyGeometry | DirtyInstances)) buildTlas(scene);
     if (dirty & (DirtyGeometry | DirtyMaterials | DirtyInstances))
     {
@@ -106,6 +139,7 @@ void GpuScene::uploadMaterials(const Scene& scene)
         g.baseColorTexture = m.baseColorTexture;
         g.normalTexture = m.normalTexture;
         g.metallicRoughnessTexture = m.metallicRoughnessTexture;
+        g.emissiveTexture = m.emissiveTexture;
         mats.push_back(g);
     }
     m_materials = makeUploadBuffer(m_ctx, mats, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, "Materials");
@@ -139,19 +173,31 @@ void GpuScene::uploadLights(const Scene& scene)
     for (const Instance& inst : scene.instances) {
         const Mesh& mesh = scene.meshes[inst.meshIndex];
         const vec3 Le = scene.materials[mesh.materialIndex].emission;
-        const float lum = glm::dot(Le, vec3(0.2126f, 0.7152f, 0.0722f));
-        if (lum <= 0.0f) continue;                                  // not emissive
+
+
+        const Material& mat = scene.materials[mesh.materialIndex];
+        if (glm::dot(mat.emission, vec3(0.2126f, 0.7152f, 0.0722f)) <= 0.0f) continue;   // not emissive
+        const Texture* emissiveTex = mat.emissiveTexture >= 0 ? &scene.textures[mat.emissiveTexture] : nullptr;
 
         for (size_t t = 0; t + 2 < mesh.indices.size(); t += 3) {
-            gpu::GpuLight L{};
-            L.p0 = vec3(inst.transform * vec4(mesh.vertices[mesh.indices[t + 0]].position, 1.0f));
-            L.p1 = vec3(inst.transform * vec4(mesh.vertices[mesh.indices[t + 1]].position, 1.0f));
-            L.p2 = vec3(inst.transform * vec4(mesh.vertices[mesh.indices[t + 2]].position, 1.0f));
-            L.emission = Le;
-            L.area = 0.5f * glm::length(glm::cross(L.p1 - L.p0, L.p2 - L.p0));
-            if (L.area <= 0.0f) continue;                           // degenerate triangle
+            const Vertex& v0 = mesh.vertices[mesh.indices[t + 0]];
+            const Vertex& v1 = mesh.vertices[mesh.indices[t + 1]];
+            const Vertex& v2 = mesh.vertices[mesh.indices[t + 2]];
 
-            L.pmf = lum * L.area;                                   // power (normalized below)
+            gpu::GpuLight L{};
+            L.p0 = vec3(inst.transform * vec4(v0.position, 1.0f));
+            L.p1 = vec3(inst.transform * vec4(v1.position, 1.0f));
+            L.p2 = vec3(inst.transform * vec4(v2.position, 1.0f));
+            L.area = 0.5f * glm::length(glm::cross(L.p1 - L.p0, L.p2 - L.p0));
+            if (L.area <= 0.0f) continue;
+
+            L.emission = mat.emission;
+            if (emissiveTex) L.emission *= averageOverTriangle(*emissiveTex, v0.uv, v1.uv, v2.uv);
+
+            const float lum = glm::dot(L.emission, vec3(0.2126f, 0.7152f, 0.0722f));
+            if (lum <= 0.0f) continue;                 // this triangle only covers black texels: never sample it
+
+            L.pmf = lum * L.area;                      // per-TRIANGLE power now (was per-material)
             totalPower += L.pmf;
             lights.push_back(L);
         }

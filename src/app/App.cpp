@@ -192,6 +192,11 @@ void App::drawUi()
     const u32 maxBounces = 16;
     ImGui::SliderScalar("Max Bounces", ImGuiDataType_U32, &m_settings.maxBounces, &minBounces, &maxBounces);
 
+    ImGui::SliderFloat("Exposure", &m_settings.exposure, 0.1f, 50.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+
+    const char* tonemappers[] = { "ACES (per channel)", "ACES (hue preserving)" };
+    int tm = int(m_settings.tonemapper);
+    if (ImGui::Combo("Tonemap", &tm, tonemappers, IM_ARRAYSIZE(tonemappers))) m_settings.tonemapper = u32(tm);
 
     ImGui::End();
 }
