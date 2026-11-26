@@ -209,7 +209,8 @@ namespace gltfload {
             textureIndices[i] = model->textures[i].source;
         }
 
-        // std::unordered_set<uint32_t> imageIsSRGB;
+        std::unordered_set<uint32_t> srgbImages;
+
         for (size_t i = 0; i < model->materials.size(); i++) {
             pt::Material material;
             tinygltf::Material gltfMat = model->materials[i];
@@ -217,8 +218,9 @@ namespace gltfload {
                 material.baseColor = glm::make_vec3(gltfMat.values["baseColorFactor"].ColorFactor().data());
             }
             if (gltfMat.values.find("baseColorTexture") != gltfMat.values.end()) {
-                material.baseColorTexture = textureIndices[gltfMat.values["baseColorTexture"].TextureIndex()] + 3; // +3 for the three dummy images loaded at first
-                // imageIsSRGB.insert(material.baseColorTexture);
+                const uint32_t image = textureIndices[gltfMat.values["baseColorTexture"].TextureIndex()];
+                material.baseColorTexture = image + 3; // +3 for the three dummy images loaded at first
+                srgbImages.insert(image);
             }
             else { material.baseColorTexture = DUMMY_COLOR_TEX_INDEX; }
 
@@ -240,12 +242,17 @@ namespace gltfload {
                 material.roughness = (float)gltfMat.values["roughnessFactor"].Factor();
             }
 
+            if (gltfMat.emissiveFactor.size() == 3)
+            {
+                material.emission = glm::vec3(gltfMat.emissiveFactor[0], gltfMat.emissiveFactor[1], gltfMat.emissiveFactor[2]);
+            }
+
             mesh->materials.push_back(material);
         }
 
         for (uint32_t i = 0; i < model->images.size(); i++) {
-            // VkFormat format = (imageIsSRGB.find(i) == imageIsSRGB.end()) ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8G8B8A8_SRGB;
-            VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
+            const VkFormat format = srgbImages.count(i) ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+            // VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
             mesh->textures.push_back(loadTexture(model, format, i));
         }
 

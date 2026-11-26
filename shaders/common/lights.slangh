@@ -1,0 +1,51 @@
+#pragma once
+#include "common/bindings.slangh"
+#include "common/sampling.slangh"
+
+struct LightSample
+{
+    float3 position;
+    float3 normal;
+    float3 emission; // Le
+    float pdfArea;
+};
+
+// bin search cdf
+uint pickLightIndex(float u, uint lightCount)
+{
+    uint lo = 0;
+    uint hi = lightCount - 1;
+    while (lo < hi)
+    {
+        uint mid = (lo + hi) / 2;
+        if (u < pc.lights[mid].cdf)
+        {
+            hi = mid;
+        }
+        else
+        {
+            lo = mid + 1;
+        }
+    }
+    return lo;
+}
+
+// ai generated
+// picks triangle alpha power, then uniform point on it
+LightSample sampleLight(inout uint rng, uint lightCount)
+{
+    float3 u = nextRandom3(rng);
+    GpuLight L = pc.lights[pickLightIndex(u.x, lightCount)];
+
+    // Uniform point on a triangle (sqrt warp so points don't bunch at a corner)
+    float su = sqrt(u.y);
+    float b0 = 1.0 - su;
+    float b1 = u.z * su;
+
+    LightSample ls;
+    ls.position = b0 * L.p0 + b1 * L.p1 + (1.0 - b0 - b1) * L.p2;
+    ls.normal = normalize(cross(L.p1 - L.p0, L.p2 - L.p0));
+    ls.emission = L.emission;
+    ls.pdfArea = L.pmf / L.area;
+    return ls;
+}

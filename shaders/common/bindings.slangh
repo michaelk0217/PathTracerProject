@@ -17,8 +17,11 @@ struct SurfaceHit
     float3 position;
     float3 normal; // interpolated shading normal, faces the incoming ray
     float3 geometricNormal; // true triangle normal, faces the incoming ray
+    float3 tangent;
+    float3 bitangent;
     float2 uv;
     uint materialIndex;
+    bool frontFace;
 };
 
 // eads the hit triangle through buffer device addresses (pc.meshes -> vertices/indices),
@@ -44,9 +47,40 @@ SurfaceHit fetchSurface(uint instanceId, uint primitive, float2 bary, float3x4 o
     // float3x4 * float4(dir, 0) -> rotates/scales a direction (fine for rigid + uniform scale)
     s.normal = normalize(mul(objectToWorld, float4(n, 0.0)));
     s.geometricNormal = normalize(mul(objectToWorld, float4(ng, 0.0)));
+
+    float3 e1 = v1.position - v0.position;
+    float3 e2 = v2.position - v0.position;
+    float2 d1 = v1.uv - v0.uv;
+    float2 d2 = v2.uv - v0.uv;
+    float det = d1.x * d2.y - d1.y * d2.x;
+    s.tangent = float3(0.0);
+    s.bitangent = float3(0.0);
+
+    if (abs(det) > 1e-12)
+    {
+        float r = 1.0 / det;
+        float3 dPdu = (e1 * d2.y - e2 * d1.y) * r;
+        float3 dPdv = (e2 * d1.x - e1 * d2.x) * r;
+        float3 t = mul(objectToWorld, float4(dPdu, 0.0));
+        float3 b = mul(objectToWorld, float4(dPdv, 0.0));
+        t = t - s.normal * dot(s.normal, t); // gram-schmidt (perpendicular to shading normal)
+
+        if (dot(t, t) > 1e-12)
+        {
+            t = normalize(t);
+            float handedness = dot(cross(s.normal, t), -b) < 0.0 ? -1.0 : 1.0;
+            s.tangent = t;
+            s.bitangent = cross(s.normal, t) * handedness;
+        }
+    }
+
+    s.frontFace = true;
     if (dot(s.geometricNormal, rayDir) > 0.0) { // hit the back side: flip so normals face the viewer
+        s.frontFace = false;
         s.geometricNormal = -s.geometricNormal;
         s.normal = -s.normal;
+        s.tangent = -s.tangent;
+        s.bitangent = -s.bitangent;
     }
     s.uv = v0.uv * w.x + v1.uv * w.y + v2.uv * w.z;
     s.materialIndex = mesh.materialIndex;

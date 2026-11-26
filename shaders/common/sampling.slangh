@@ -33,6 +33,14 @@ float2 nextRandom2(inout uint state)
     return float2(a, b);
 }
 
+float3 nextRandom3(inout uint state)
+{
+    float a = nextRandom(state);
+    float b = nextRandom(state);
+    float c = nextRandom(state);
+    return float3(a, b, c);
+}
+
 // directions-------------
 // Duff et al. 2017 "Building an Orthonormal Basis, Revisited"
 void buildOrthonormalBasis(float3 n, out float3 t, out float3 b)

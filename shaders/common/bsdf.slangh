@@ -1,0 +1,152 @@
+#pragma once
+#include "common/sampling.slangh"
+
+static const float kMinRoughness = 0.1;
+
+struct BsdfParams
+{
+    float3 baseColor;
+    float metallic;
+    float roughness;
+};
+
+float luminance(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
+
+float3 fresnelShlick(float3 f0, float cosTheta)
+{
+    float m = 1.0 - saturate(cosTheta);
+    float m2 = m * m;
+    return f0 + (1.0 - f0) * (m2 * m2 * m);
+}
+
+// GGX / Trowbrighde-Reitz normal dist (a2 = alpha^2)
+float ggxD(float NoH, float a2)
+{
+    float d = NoH * NoH * (a2 - 1.0) + 1.0;
+    return a2 / (kPi * d * d);
+}
+
+// height correlated smith masking-shadowing (Heitz 2014)
+float smithVisiblilty(float NoV, float NoL, float a2)
+{
+    float gv = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2);
+    float gl = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
+    return 0.5 / max(gv + gl, 1e-7);
+}
+
+// smith g1 for viewe dir
+float smithG1(float NoV, float a2)
+{
+    return 2.0 * NoV / (NoV + sqrt(a2 + (1.0 - a2) * NoV * NoV));
+}
+
+// glTf/Disney convention
+float alphaSquared(BsdfParams m)
+{
+    float r = max(m.roughness, kMinRoughness);
+    float alpha = r * r;
+    return alpha * alpha;
+}
+
+// dielectrics ~4% reflection, metal tint on base color
+float3 specularF0(BsdfParams m)
+{
+    return lerp(float3(0.04), m.baseColor, m.metallic);
+}
+
+// ai
+float specularProbability(BsdfParams m, float NoV)
+{
+    float spec = luminance(fresnelShlick(specularF0(m), NoV));
+    float diff = luminance(m.baseColor) * (1.0 - m.metallic);
+    return spec / max(spec + diff, 1e-4);
+}
+
+// f(w0, wi) without cos
+// wo = toward viewer
+// wi toward light
+// n = world space shading normal
+float3 bsdfEval(BsdfParams m, float3 n, float3 wo, float3 wi)
+{
+    float NoV = dot(n, wo);
+    float NoL = dot(n, wi);
+    if (NoV <= 0.0 || NoL <= 0.0) return float3(0.0);
+
+    float3 h = normalize(wo + wi);
+    float NoH = saturate(dot(n, h));
+    float VoH = saturate(dot(wo, h));
+    float a2 = alphaSquared(m);
+
+    float3 F = fresnelShlick(specularF0(m), VoH);
+    float3 specular = F * (ggxD(NoH, a2) * smithVisiblilty(NoV, NoL, a2));
+    float3 diffuse = (1.0 - F) * (1.0 - m.metallic) * m.baseColor / kPi;
+    return diffuse + specular;
+}
+
+// ai gen
+// probability density function of bsdfSample
+float bsdfPdf(BsdfParams m, float3 n, float3 wo, float3 wi)
+{
+    float NoV = dot(n, wo);
+    float NoL = dot(n, wi);
+    if (NoV <= 0.0 || NoL <= 0.0) return 0.0;
+
+    float3 h = normalize(wo + wi);
+    float NoH = saturate(dot(n, h));
+    float a2 = alphaSquared(m);
+
+    float pSpec = specularProbability(m, NoV);
+    float pdfSpec = ggxD(NoH, a2) * smithG1(NoV, a2) / (4.0 * NoV); // VNDF-sampled reflection
+    float pdfDiff = NoL / kPi;                                      // cosine hemisphere
+    return pSpec * pdfSpec + (1.0 - pSpec) * pdfDiff;
+}
+
+// ai generated
+// visible-normal sampling, Dupuy & Benyoub 2023 ("Sampling Visible GGX Normals with Spherical Caps").
+// woLocal: view direction in the local frame (z = normal). Returns a microfacet normal (local).
+float3 sampleGgxVndf(float3 woLocal, float alpha, float2 u)
+{
+    float3 v = normalize(float3(woLocal.xy * alpha, woLocal.z)); // stretch → hemisphere configuration
+    float phi = 2.0 * kPi * u.x;
+    float z = (1.0 - u.y) * (1.0 + v.z) - v.z;
+    float sinTheta = sqrt(saturate(1.0 - z * z));
+    float3 c = float3(sinTheta * cos(phi), sinTheta * sin(phi), z);
+    float3 h = c + v;
+    return normalize(float3(h.xy * alpha, h.z)); // unstretch
+}
+
+struct BsdfSample
+{
+    float3 wi;
+    float3 weight; // f * cos / pdf  (multiply into throughput)
+    float pdf;
+    bool valid;
+};
+
+// ai assisted
+BsdfSample bsdfSample(BsdfParams m, float3 n, float3 wo, float3 u)
+{
+    BsdfSample bs;
+    bs.wi = float3(0.0); bs.weight = float3(0.0); bs.pdf = 0.0; bs.valid = false;
+
+    float NoV = dot(n, wo);
+    if (NoV <= 0.0) return bs;
+
+    if (u.z < specularProbability(m, NoV)) {
+        float3 t, b;
+        buildOrthonormalBasis(n, t, b);
+        float3 woLocal = float3(dot(wo, t), dot(wo, b), NoV);
+        float alpha = sqrt(alphaSquared(m));
+        float3 hl = sampleGgxVndf(woLocal, alpha, u.xy);
+        float3 h = t * hl.x + b * hl.y + n * hl.z;
+        bs.wi = reflect(-wo, h);
+    } else {
+        bs.wi = sampleCosineHemisphere(n, u.xy);
+    }
+
+    bs.pdf = bsdfPdf(m, n, wo, bs.wi);
+    if (bs.pdf <= 0.0) return bs; // specular reflection pointed below the surface
+    bs.weight = bsdfEval(m, n, wo, bs.wi) * dot(n, bs.wi) / bs.pdf;
+    bs.valid = true;
+    return bs;
+}

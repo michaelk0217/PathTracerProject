@@ -64,6 +64,16 @@ struct GpuMeshInfo {
     uint triangleCount;
 };
 
+struct GpuLight
+{
+    float3 p0;
+    float3 p1;
+    float3 p2;
+    float3 emission; // radiance Le
+    float area;
+    float pmf;
+    float cdf;
+};
 
 
 
@@ -75,21 +85,21 @@ struct FrameUniforms {
     float3      cameraPosition;
     uint        maxBounces;
     float       exposure;
-    int         lightMaterial;
+    int         lightCount;
     uint        lightSampleCount;
-    float3      lightPosition;
-    float       lightWidth;
     float3      directionToSun;
     float3      sunIrradiance;
     uint        frameIndex;
     uint        accumulatedFrames;
     float3      skyRadiance;
+    uint        debugView;
 };
 
 struct PushConstants {
     PT_PTR(FrameUniforms)       frame;
     PT_PTR(GpuMeshInfo)         meshes;
     PT_PTR(GpuMaterial)         materials;
+    PT_PTR(GpuLight)            lights;
     uint2                       extent;
 };
 

@@ -9,9 +9,10 @@
 
 namespace pt
 {
+enum class SceneLighting : int { AlbedoOnly, CeilingLight, Sun, ManyLights };
 // procedural cornell box for lightweight reference scene (ai generated)
 Scene makeCornellBox();
-void setUpSponzaLighting(Scene& scene, bool useSun);
+void setUpSponzaLighting(Scene& scene, SceneLighting lighting);
 
 Scene loadGltf(const std::string& path);
 }

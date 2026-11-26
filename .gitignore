@@ -6,3 +6,4 @@ out/
 *.spv
 CMakeUserPresets.json
 imgui.ini
+assets/local/

@@ -48,6 +48,7 @@ bool GpuScene::sync(Scene& scene)
 
     if (dirty & DirtyMaterials) uploadMaterials(scene);
     if (dirty & (DirtyGeometry | DirtyInstances)) uploadMeshInfos(scene);
+    if (dirty & (DirtyGeometry | DirtyInstances | DirtyMaterials)) uploadLights(scene);
     if (dirty & (DirtyGeometry | DirtyInstances)) buildTlas(scene);
     if (dirty & (DirtyGeometry | DirtyMaterials | DirtyInstances))
     {
@@ -128,6 +129,46 @@ void GpuScene::uploadMeshInfos(const Scene& scene)
     m_meshInfos = makeUploadBuffer(m_ctx, infos, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, "MeshInfos");
 }
 
+
+// ai generated
+void GpuScene::uploadLights(const Scene& scene)
+{
+    std::vector<gpu::GpuLight> lights;
+    float totalPower = 0.0f;
+
+    for (const Instance& inst : scene.instances) {
+        const Mesh& mesh = scene.meshes[inst.meshIndex];
+        const vec3 Le = scene.materials[mesh.materialIndex].emission;
+        const float lum = glm::dot(Le, vec3(0.2126f, 0.7152f, 0.0722f));
+        if (lum <= 0.0f) continue;                                  // not emissive
+
+        for (size_t t = 0; t + 2 < mesh.indices.size(); t += 3) {
+            gpu::GpuLight L{};
+            L.p0 = vec3(inst.transform * vec4(mesh.vertices[mesh.indices[t + 0]].position, 1.0f));
+            L.p1 = vec3(inst.transform * vec4(mesh.vertices[mesh.indices[t + 1]].position, 1.0f));
+            L.p2 = vec3(inst.transform * vec4(mesh.vertices[mesh.indices[t + 2]].position, 1.0f));
+            L.emission = Le;
+            L.area = 0.5f * glm::length(glm::cross(L.p1 - L.p0, L.p2 - L.p0));
+            if (L.area <= 0.0f) continue;                           // degenerate triangle
+
+            L.pmf = lum * L.area;                                   // power (normalized below)
+            totalPower += L.pmf;
+            lights.push_back(L);
+        }
+    }
+
+    float running = 0.0f;
+    for (gpu::GpuLight& L : lights) {
+        L.pmf /= totalPower;
+        running += L.pmf;
+        L.cdf = running;
+    }
+    if (!lights.empty()) lights.back().cdf = 1.0f;                  // guard against float rounding
+
+    m_lightCount = static_cast<u32>(lights.size());
+    m_lights = makeUploadBuffer(m_ctx, lights, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, "Lights");
+    log::info("GpuScene: {} emissive triangles", m_lightCount);
+}
 
 vk::BlasInput GpuScene::blasInput(u32 meshIndex) const
 {

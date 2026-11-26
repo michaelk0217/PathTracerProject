@@ -51,7 +51,7 @@ App::~App()
     m_window.reset();
 }
 
-void App::loadScene(SceneId id, SponzaLighting lighting)
+void App::loadScene(SceneId id, SceneLighting lighting)
 {
     if (id == SceneId::CornellBox)
     {
@@ -60,10 +60,7 @@ void App::loadScene(SceneId id, SponzaLighting lighting)
     else
     {
         m_scene = loadGltf(std::string(PT_ASSET_DIR) + "/scenes/sponza/Sponza.gltf");
-        if (lighting != SponzaLighting::AlbedoOnly)
-        {
-            setUpSponzaLighting(m_scene, lighting == SponzaLighting::Sun);
-        }
+        setUpSponzaLighting(m_scene, lighting);
     }
     m_sceneId = id;
     m_sponzaLighting = lighting;
@@ -164,17 +161,25 @@ void App::drawUi()
         m_reloadScene = true;
     }
 
-    if (m_sceneId == SceneId::Sponza) 
+    if (m_sceneId == SceneId::Sponza)
     {
         int lighting = int(m_sponzaLighting);
         bool changed = false;
-        changed |= ImGui::RadioButton("Albedo", &lighting, int(SponzaLighting::AlbedoOnly));   ImGui::SameLine();
-        changed |= ImGui::RadioButton("Area light", &lighting, int(SponzaLighting::CeilingLight)); ImGui::SameLine();
-        changed |= ImGui::RadioButton("Sun", &lighting, int(SponzaLighting::Sun));
-        if (changed) { m_sponzaLighting = SponzaLighting(lighting); m_reloadScene = true; }
+        changed |= ImGui::RadioButton("Albedo", &lighting, int(SceneLighting::AlbedoOnly));   ImGui::SameLine();
+        changed |= ImGui::RadioButton("Area light", &lighting, int(SceneLighting::CeilingLight)); ImGui::SameLine();
+        changed |= ImGui::RadioButton("Sun", &lighting, int(SceneLighting::Sun));  ImGui::SameLine();
+        changed |= ImGui::RadioButton("Many Lights", &lighting, int(SceneLighting::ManyLights));
+        if (changed) { m_sponzaLighting = SceneLighting(lighting); m_reloadScene = true; }
     }
 
-    if (m_scene.lightMaterial >= 0) 
+    // --- Debug View ---
+    const char* views[] = { "Path traced", "Albedo", "Normals", "Roughness", "Metallic" };
+    int v = int(m_settings.debugView);
+    if (ImGui::Combo("View", &v, views, IM_ARRAYSIZE(views))) m_settings.debugView = u32(v);
+
+    // --- Light behavior ---
+    ImGui::Text("%u emissive triangles", m_renderer->lightCount());
+    if (m_renderer->lightCount() > 0) 
     {
         const u32 minSamples = 1, maxSamples = 64;
         ImGui::SliderScalar("Light samples", ImGuiDataType_U32, &m_settings.lightSampleCount, &minSamples, &maxSamples);

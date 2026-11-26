@@ -36,6 +36,8 @@ public:
     void resetAccumulation() { m_resetAccumulation = true; }
     u32 accumulatedFrames() const { return m_accumulatedFrames; }
 
+    u32 lightCount() const;
+
 private:
     // one per frame in flight.
     struct FrameData

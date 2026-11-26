@@ -20,7 +20,7 @@ namespace
 {
 bool integratorSettingsChanged(const RenderSettings& a, const RenderSettings& b)
 {
-	return a.maxBounces != b.maxBounces || a.lightSampleCount != b.lightSampleCount;
+	return a.maxBounces != b.maxBounces || a.lightSampleCount != b.lightSampleCount || a.debugView != b.debugView;
 }
 }
 Renderer::Renderer(vk::Context& ctx, Extent2D extent, std::filesystem::path shaderDir, bool vsync)
@@ -168,15 +168,14 @@ void Renderer::writeFrameUniforms(FrameData& f, Scene& scene, Extent2D extent, c
 	u.cameraPosition = scene.camera.position;
 	u.maxBounces = settings.maxBounces;
 	u.exposure = settings.exposure;
-	u.lightMaterial = scene.lightMaterial;
-	u.lightPosition = scene.lightPosition;
-	u.lightWidth = scene.lightWidth;
+	u.lightCount = m_gpuScene->lightCount();
 	u.directionToSun = scene.directionToSun;
 	u.sunIrradiance = scene.sunIrradiance;
 	u.lightSampleCount = settings.lightSampleCount;
 	u.frameIndex = static_cast<u32>(m_frameNumber);
 	u.accumulatedFrames = m_accumulatedFrames;
 	u.skyRadiance = scene.skyRadiance;
+	u.debugView = settings.debugView;
 	f.uniforms.upload(&u, sizeof(u));
 
 	++m_accumulatedFrames;
@@ -236,6 +235,7 @@ bool Renderer::renderFrame(Scene& scene, const RenderSettings& settings, const O
 	pc.frame = f.uniforms.address();
 	pc.meshes = m_gpuScene->meshInfoAddress();
 	pc.materials = m_gpuScene->materialAddress();
+	pc.lights = m_gpuScene->lightAddress();
 	pc.extent = { e.width, e.height };
 
 	VkDescriptorSet set = m_bindless->set();
@@ -370,5 +370,7 @@ void Renderer::recordClear(VkCommandBuffer cmd, u32 imageIndex, const vec4& colo
 	constexpr vk::ImageState kPresent{ VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE };
 	vk::imageBarrier(cmd, image, vk::states::TransferDst, kPresent);
 }
+
+u32 Renderer::lightCount() const { return m_gpuScene->lightCount(); }
 
 }

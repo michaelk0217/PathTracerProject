@@ -1,5 +1,7 @@
 #include "common/bindings.slangh"
 #include "common/sampling.slangh"
+#include "common/bsdf.slangh"
+#include "common/lights.slangh"
 
 struct HitPayload
 {
@@ -8,7 +10,10 @@ struct HitPayload
     float2 uv;
     float3 normal;
     float3 geometricNormal;
-    uint   materialIndex;
+    float3 tangent;
+    float3 bitangent;
+    uint materialIndex;
+    bool frontFace;
 };
 
 struct ShadowPayload
@@ -27,25 +32,52 @@ struct Surface
     float3 position;
     float3 normal;
     float3 geometricNormal;
+    float3 wo;
+    BsdfParams bsdf;
     float3 albedo;
     float3 emission;
     bool isLight;
 };
 
-Surface evaluateSurface(HitPayload p, FrameUniforms frame)
+Surface evaluateSurface(HitPayload p, FrameUniforms frame, float3 wo)
 {
     GpuMaterial m = pc.materials[p.materialIndex];
     Surface s;
     s.position = p.position;
     s.normal = p.normal;
     s.geometricNormal = p.geometricNormal;
-    s.albedo = m.baseColor;
+    s.wo = wo;
+
+    float3 baseColor = m.baseColor;
     if (m.baseColorTexture >= 0)
     {
-        s.albedo *= gTextures[NonUniformResourceIndex(m.baseColorTexture)].SampleLevel(p.uv, 0).rgb;
+        baseColor *= gTextures[NonUniformResourceIndex(m.baseColorTexture)].SampleLevel(p.uv, 0).rgb;
     }
+
+    float roughness = m.roughness;
+    float metallic = m.metallic;
+    if (m.metallicRoughnessTexture >= 0)
+    {
+        float4 mr = gTextures[NonUniformResourceIndex(m.metallicRoughnessTexture)].SampleLevel(p.uv, 0);
+        roughness *= mr.g;
+        metallic *= mr.b;
+    }
+
+    s.normal = p.normal;
+    if (m.normalTexture >= 0 && dot(p.tangent, p.tangent) > 0.0)
+    {
+        float3 tn = gTextures[NonUniformResourceIndex(m.normalTexture)].SampleLevel(p.uv, 0).xyz * 2.0 - 1.0;
+        float3 mapped = normalize(p.tangent * tn.x + p.bitangent * tn.y + p.normal * tn.z);
+        if (dot(mapped, wo) > 0.0) s.normal = mapped; // cuz normal map can tilt away from viewer
+    }
+
+    s.bsdf.baseColor = baseColor;
+    s.bsdf.metallic = saturate(metallic);
+    s.bsdf.roughness = saturate(roughness);
+    s.albedo = baseColor;
     s.emission = m.emission;
-    s.isLight = frame.lightMaterial >= 0 && p.materialIndex == uint(frame.lightMaterial);
+    // s.isLight = frame.lightMaterial >= 0 && p.materialIndex == uint(frame.lightMaterial);
+    s.isLight = any(m.emission > 0.0);
 
     return s;
 }
@@ -62,37 +94,69 @@ bool isVisible(float3 origin, float3 direction, float maxDistance)
     return !sp.hit;
 }
 
-// refactored estimateDirectLighting function below
-// using NEE
-float3 sampleAreaLight(Surface s, inout uint rng, uint sampleCount, FrameUniforms frame)
+// integrating emissive triangles and refactoring sampleAreaLight
+// NEE over all emissive triangles: Lo = mean over samples of  f · Le · V · cosS · cosL / (r² · pdfArea)
+float3 sampleEmissiveLights(Surface s, inout uint rng, uint sampleCount, FrameUniforms frame)
 {
-    float3 Le = pc.materials[frame.lightMaterial].emission;
-    float lightArea = frame.lightWidth * frame.lightWidth;
     float3 origin = offsetRayOrigin(s.position, s.geometricNormal);
+    float3 total = float3(0.0);
 
-    float total = 0.0;
     for (uint i = 0; i < sampleCount; ++i)
     {
-        float2 u = nextRandom2(rng);
-        float3 lightPoint = frame.lightPosition + float3(u.x - 0.5, 0.0, u.y - 0.5) * frame.lightWidth;
-        float3 toLight = lightPoint - origin;
+        LightSample ls = sampleLight(rng, frame.lightCount);
+
+        float3 toLight = ls.position - origin;
         float dist2 = dot(toLight, toLight);
         if (dist2 <= 1e-8) continue;
         float dist = sqrt(dist2);
         float3 dir = toLight / dist;
 
         float cosSurface = dot(s.normal, dir);
-        float cosLight = dot(lightNormal, -dir);
+        float cosLight = dot(ls.normal, -dir); // > 0: emitting side
         if (cosSurface <= 0.0 || cosLight <= 0.0) continue;
 
-        // NEE by shadow ray
-        if (isVisible(origin, dir, dist))
-        {
-            total += cosSurface * cosLight / dist2;
-        }
+        float3 f = bsdfEval(s.bsdf, s.normal, s.wo, dir);
+        if (all(f <= 0.0)) continue; // skip the shadow ray if it cant contribute
+
+        if (isVisible(origin, dir, dist * 0.999))
+            total += f * ls.emission * (cosSurface * cosLight / (dist2 * ls.pdfArea));
     }
-    return (s.albedo / kPi) * Le * lightArea * (total / float(sampleCount));
+    return total / float(sampleCount);
 }
+
+// refactored estimateDirectLighting function below
+// using NEE
+// float3 sampleAreaLight(Surface s, inout uint rng, uint sampleCount, FrameUniforms frame)
+// {
+//     float3 Le = pc.materials[frame.lightMaterial].emission;
+//     float lightArea = frame.lightWidth * frame.lightWidth;
+//     float3 origin = offsetRayOrigin(s.position, s.geometricNormal);
+
+//     float3 total = float3(0.0);
+//     for (uint i = 0; i < sampleCount; ++i)
+//     {
+//         float2 u = nextRandom2(rng);
+//         float3 lightPoint = frame.lightPosition + float3(u.x - 0.5, 0.0, u.y - 0.5) * frame.lightWidth;
+//         float3 toLight = lightPoint - origin;
+//         float dist2 = dot(toLight, toLight);
+//         if (dist2 <= 1e-8) continue;
+//         float dist = sqrt(dist2);
+//         float3 dir = toLight / dist;
+
+//         float cosSurface = dot(s.normal, dir);
+//         float cosLight = dot(lightNormal, -dir);
+//         if (cosSurface <= 0.0 || cosLight <= 0.0) continue;
+
+//         // NEE by shadow ray
+//         if (isVisible(origin, dir, dist * 0.999))
+//         {
+//             // total += cosSurface * cosLight / dist2;
+//             total += bsdfEval(s.bsdf, s.normal, s.wo, dir) * (cosSurface * cosLight / dist2);
+//         }
+//     }
+//     // return (s.albedo / kPi) * Le * lightArea * (total / float(sampleCount));
+//     return Le * lightArea * (total / float(sampleCount));
+// }
 
 // float3 estimateDirectLighting(HitPayload hit, float3 albedo, float3 emission, inout uint rng, FrameUniforms frame)
 // {
@@ -136,15 +200,16 @@ float3 sampleSun(Surface s, FrameUniforms frame)
 
     float3 origin = offsetRayOrigin(s.position, s.geometricNormal);
     if (!isVisible(origin, frame.directionToSun, 1e30)) return float3(0.0);
-    return (s.albedo / kPi) * frame.sunIrradiance * cosSurface;
+    // return (s.albedo / kPi) * frame.sunIrradiance * cosSurface;
+    return bsdfEval(s.bsdf, s.normal, s.wo, frame.directionToSun) * frame.sunIrradiance * cosSurface;
 }
 
 float3 directLighting(Surface s, inout uint rng, uint sampleCount, FrameUniforms frame)
 {
     float3 L = float3(0.0);
-    if (frame.lightMaterial >= 0)
+    if (frame.lightCount >= 0)
     {
-        L += sampleAreaLight(s, rng, sampleCount, frame);
+        L += sampleEmissiveLights(s, rng, sampleCount, frame);
     }
     if (any(frame.sunIrradiance > 0.0))
     {
@@ -170,7 +235,7 @@ void rayGen()
     // this smooths out as you pick up more samples. free anti-ailiasing
     RayDesc ray = primaryRay(frame, pixel, dims, nextRandom2(rng));
 
-    const bool hasLights = frame.lightMaterial >= 0 || any(frame.sunIrradiance > 0.0) || any(frame.skyRadiance > 0.0);
+    const bool hasLights = frame.lightCount >= 0 || any(frame.sunIrradiance > 0.0) || any(frame.skyRadiance > 0.0);
 
     float3 radiance = float3(0.0); // amount of light the path collects (our color)
     float3 throughput = float3(1.0); // how much of later-found light reaches camera
@@ -188,13 +253,24 @@ void rayGen()
             break;
         }
 
-        Surface s = evaluateSurface(p, frame);
+        Surface s = evaluateSurface(p, frame, -ray.Direction);
+
+        // --------DEBUG VIEW-------
+        if (bounce == 0 && frame.debugView != 0)
+        {
+            if (frame.debugView == 1) radiance = s.albedo;
+            else if (frame.debugView == 2) radiance = s.normal * 0.5 + 0.5;
+            else if (frame.debugView == 3) radiance = float3(s.bsdf.roughness);
+            else if (frame.debugView == 4) radiance = float3(s.bsdf.metallic);
+            break;
+        }
+        // ------------------------
 
         if (!hasLights) { radiance = s.albedo; break;}
 
         if (s.isLight)
         {
-            if (bounce == 0 && dot(lightNormal, -ray.Direction) > 0.0)
+            if (bounce == 0 && p.frontFace)
             {
                 radiance += throughput * s.emission;
             }
@@ -206,10 +282,15 @@ void rayGen()
 
         if (bounce == frame.maxBounces) break;
 
-        float3 dir = sampleCosineHemisphere(s.normal, nextRandom2(rng));
-        if (dot(dir, s.geometricNormal) <= 0.0) break;
+        // float3 dir = sampleCosineHemisphere(s.normal, nextRandom2(rng));
+        // if (dot(dir, s.geometricNormal) <= 0.0) break;
 
-        throughput *= s.albedo;
+        BsdfSample bs = bsdfSample(s.bsdf, s.normal, s.wo, nextRandom3(rng));
+        if (!bs.valid) break;
+        if (dot(bs.wi, s.geometricNormal) <= 0.0) break;
+
+        // throughput *= s.albedo;
+        throughput *= bs.weight;
 
         // russian roulette
         // ending low contribution paths ithout bias
@@ -220,7 +301,7 @@ void rayGen()
             throughput /= q;
         }
 
-        ray = makeRay(offsetRayOrigin(s.position, s.geometricNormal), dir, 0.0, 1e30);
+        ray = makeRay(offsetRayOrigin(s.position, s.geometricNormal), bs.wi, 0.0, 1e30);
     }
 
 
@@ -283,4 +364,7 @@ void closestHit(inout HitPayload p, in BuiltInTriangleIntersectionAttributes att
     p.geometricNormal = s.geometricNormal;
     p.uv = s.uv;
     p.materialIndex = s.materialIndex;
+    p.tangent = s.tangent;
+    p.bitangent = s.bitangent;
+    p.frontFace = s.frontFace;
 }

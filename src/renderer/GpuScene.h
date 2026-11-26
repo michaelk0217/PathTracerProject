@@ -27,6 +27,9 @@ public:
 
 	VkDeviceAddress meshInfoAddress() const { return m_meshInfos.address(); }
 	VkDeviceAddress materialAddress() const { return m_materials.address(); }
+	VkDeviceAddress lightAddress() const { return m_lights.address(); }
+
+	u32 lightCount() const { return m_lightCount; }
 
 	u32 meshCount() const { return static_cast<u32>(m_vertexOffset.size()); }
 	vk::BlasInput blasInput(u32 meshIndex) const;
@@ -42,6 +45,7 @@ private:
 	void uploadGeometry(const Scene& scene); // vert, indices, per-mesh offsets
 	void uploadMaterials(const Scene& scene);
 	void uploadMeshInfos(const Scene& scene); // one GpuMeshInfo per instance
+	void uploadLights(const Scene& scene);
 	
 
 	void buildBlases();
@@ -54,6 +58,8 @@ private:
 	vk::Buffer m_indices; // u32[]
 	vk::Buffer m_meshInfos; // gpu::GpuMeshInfo[instanceCount]
 	vk::Buffer m_materials; // gpu::GpuMaterial[]
+	vk::Buffer m_lights;
+	u32 m_lightCount = 0;
 	
 	std::vector<u32> m_vertexOffset, m_vertexCount;
 	std::vector<u32> m_indexOffset, m_triangleCount;

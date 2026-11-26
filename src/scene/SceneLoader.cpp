@@ -51,23 +51,50 @@ void addCeilingLight(Scene& scene, vec3 center, float width, vec3 emission) {
     const u32 material = scene.addMaterial({ .name = "light", .baseColor = vec3(0.0f), .emission = emission });
     const vec3 corner = center - vec3(width * 0.5f, 0.0f, width * 0.5f);
     scene.addInstance(scene.addMesh(makeQuad("light", corner, {width, 0, 0}, {0, 0, width}, material)));
-    scene.lightMaterial = static_cast<i32>(material);
-    scene.lightPosition = center;
-    scene.lightWidth = width;
+}
+
+// ai generated light grid function
+// A grid of small colored panels facing down: hard for plain NEE, ReSTIR's showcase.
+void addLightGrid(Scene& scene, vec3 center, vec2 extent, int nx, int nz, float size, float intensity)
+{
+    const vec3 palette[] = { {1.0f, 0.55f, 0.25f}, {0.3f, 0.6f, 1.0f}, {1.0f, 0.3f, 0.5f}, {0.5f, 1.0f, 0.4f} };
+    u32 materials[4];
+    for (int i = 0; i < 4; ++i)
+        materials[i] = scene.addMaterial({ .name = "gridLight", .baseColor = vec3(0.0f), .emission = palette[i] * intensity });
+
+    for (int ix = 0; ix < nx; ++ix)
+        for (int iz = 0; iz < nz; ++iz) {
+            const vec3 c = center + vec3((ix + 0.5f) / nx - 0.5f, 0.0f, (iz + 0.5f) / nz - 0.5f) * vec3(extent.x, 0.0f, extent.y);
+            const vec3 corner = c - vec3(size * 0.5f, 0.0f, size * 0.5f);
+            // u = +X, v = +Z → cross(u, v) = −Y: emits downward
+            scene.addInstance(scene.addMesh(makeQuad("gridLight", corner, { size, 0, 0 }, { 0, 0, size }, materials[(ix + iz) % 4])));
+        }
 }
 
 } // namespace
 
-void setUpSponzaLighting(Scene& scene, bool useSun) {
-    if (useSun) {
-        // AI-assisted sun setup with the direction pointing from the surface toward the sun
+// ai assisted
+void setUpSponzaLighting(Scene& scene, SceneLighting lighting)
+{
+    switch (lighting) {
+    case SceneLighting::AlbedoOnly:
+        break;                                                    // no lights: debug albedo view
+    case SceneLighting::CeilingLight:
+        addCeilingLight(scene, { -2.0f, 6.8f, -0.3f }, 4.0f, { 36.0f, 34.0f, 31.0f });
+        break;
+    case SceneLighting::Sun:
         scene.directionToSun = glm::normalize(vec3(-0.48f, 1.0f, -0.32f));
-        scene.sunIrradiance = {5.2f, 4.9f, 4.4f};
-        scene.skyRadiance = { 0.25, 0.35f, 0.5f };
-    } else {
-        addCeilingLight(scene, {-2.0f, 6.8f, -0.3f}, 4.0f, {36.0f, 34.0f, 31.0f});
+        scene.sunIrradiance = { 5.2f, 4.9f, 4.4f };
+        scene.skyRadiance = { 0.25f, 0.35f, 0.5f };
+        break;
+    case SceneLighting::ManyLights:
+        // 16 × 4 = 64 panels (128 emissive triangles), 30 cm each, along the courtyard. No sun/sky: a "night" scene.
+        addLightGrid(scene, /*center*/{ -1.0f, 3.5f, -0.3f }, /*extent x,z*/{ 20.0f, 5.0f },
+            /*nx*/ 16, /*nz*/ 4, /*size*/ 0.3f, /*intensity*/ 80.0f);
+        break;
     }
-    scene.camera.position = {-8.4f, 1.7f, -0.15f};
+
+    scene.camera.position = { -8.4f, 1.7f, -0.15f };
     scene.camera.yaw = 0.0f;
     scene.camera.pitch = 6.0f;
     scene.camera.verticalFovDeg = 55.0f;
@@ -87,7 +114,11 @@ Scene makeCornellBox() {
     add(makeQuad("left", { -1, 0, -1 }, { 0, 2, 0 }, { 0, 0, 2 }, red));
     add(makeQuad("right", { 1, 0, -1 }, { 0, 0, 2 }, { 0, 2, 0 }, green));
     addCeilingLight(s, {0.0f, 1.98f, 0.0f}, 0.5f, {17.0f, 12.0f, 4.0f});
-    add(makeBox("tallBox", { -0.6f, 0.0f, -0.6f }, { -0.1f, 1.2f, -0.1f }, white));
+    //add(makeBox("tallBox", { -0.6f, 0.0f, -0.6f }, { -0.1f, 1.2f, -0.1f }, white));
+
+    // metal box test
+    const u32 metal = s.addMaterial({ .name = "metal", .baseColor = { 0.95f, 0.93f, 0.88f }, .roughness = 0.3f, .metallic = 1.0f });
+    add(makeBox("tallBox", { -0.6f, 0.0f, -0.6f }, { -0.1f, 1.2f, -0.1f }, metal));
 
     s.camera.position = { 0.0f, 1.0f, 3.4f };
     s.camera.yaw = -90.0f;
@@ -158,8 +189,8 @@ Scene loadGltf(const std::string& path) {
      }
 
      s.textures.push_back(loadDummyTexture("dummyColor.png", VK_FORMAT_R8G8B8A8_SRGB));
-     s.textures.push_back(loadDummyTexture("dummyNormal.png", VK_FORMAT_R8G8B8A8_SRGB));
-     s.textures.push_back(loadDummyTexture("dummyMetallicRoughness.png", VK_FORMAT_R8G8B8A8_SRGB));
+     s.textures.push_back(loadDummyTexture("dummyNormal.png", VK_FORMAT_R8G8B8A8_UNORM));
+     s.textures.push_back(loadDummyTexture("dummyMetallicRoughness.png", VK_FORMAT_R8G8B8A8_UNORM));
 
      for (auto& tex : mesh->textures) {
          s.textures.push_back(std::move(tex));
