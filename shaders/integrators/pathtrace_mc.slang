@@ -240,7 +240,7 @@ void rayGen()
     // this smooths out as you pick up more samples. free anti-ailiasing
     RayDesc ray = primaryRay(frame, pixel, dims, nextRandom2(rng));
 
-    const bool hasLights = frame.lightCount >= 0 || any(frame.sunIrradiance > 0.0) || any(frame.skyRadiance > 0.0);
+    const bool hasLights = frame.lightCount > 0 || any(frame.sunIrradiance > 0.0) || any(frame.skyRadiance > 0.0);
 
     float3 radiance = float3(0.0); // amount of light the path collects (our color)
     float3 throughput = float3(1.0); // how much of later-found light reaches camera
