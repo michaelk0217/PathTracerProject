@@ -213,6 +213,8 @@ namespace gltfload {
 
         for (size_t i = 0; i < model->materials.size(); i++) {
             pt::Material material;
+            material.metallic = 1.0f;
+            material.roughness = 1.0f;
             tinygltf::Material gltfMat = model->materials[i];
             if (gltfMat.values.find("baseColorFactor") != gltfMat.values.end()) {
                 material.baseColor = glm::make_vec3(gltfMat.values["baseColorFactor"].ColorFactor().data());
