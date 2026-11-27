@@ -20,7 +20,7 @@ namespace
 {
 bool integratorSettingsChanged(const RenderSettings& a, const RenderSettings& b)
 {
-	return a.maxBounces != b.maxBounces || a.lightSampleCount != b.lightSampleCount || a.debugView != b.debugView;
+	return a.maxBounces != b.maxBounces || a.lightSampleCount != b.lightSampleCount || a.debugView != b.debugView || a.accumulate != b.accumulate;
 }
 }
 Renderer::Renderer(vk::Context& ctx, Extent2D extent, std::filesystem::path shaderDir, bool vsync)
@@ -156,7 +156,7 @@ void Renderer::writeFrameUniforms(FrameData& f, Scene& scene, Extent2D extent, c
 	m_lastViewInverse = viewInverse;
 	m_lastSettings = settings;
 
-	if (m_resetAccumulation)
+	if (m_resetAccumulation || !settings.accumulate)
 	{
 		m_accumulatedFrames = 0;
 		m_resetAccumulation = false;

@@ -41,6 +41,9 @@ private:
 	Scene m_scene;
 	RenderSettings m_settings;
 
+	bool m_comparisonMode = false;
+	RenderSettings m_savedSettings{};
+
 	SceneId m_sceneId = SceneId::CornellBox;
 	SceneLighting m_sponzaLighting = SceneLighting::CeilingLight;
 	bool m_reloadScene = false;
