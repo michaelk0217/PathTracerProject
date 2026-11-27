@@ -196,6 +196,12 @@ Scene loadGltf(const std::string& path) {
          s.textures.push_back(std::move(tex));
      }
 
+     pt::Material dummyMat;
+     dummyMat.baseColorTexture = DUMMY_COLOR_TEX_INDEX;
+     dummyMat.normalTexture = DUMMY_NORMAL_TEX_INDEX;
+     dummyMat.metallicRoughnessTexture = DUMMY_METALROUGH_TEX_INDEX;
+     s.materials.push_back(dummyMat);
+
      for (auto& m : mesh->materials) {
          s.addMaterial(m);
      }

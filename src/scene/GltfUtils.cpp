@@ -39,7 +39,7 @@ namespace gltfload {
             for (size_t i = 0; i < gltfMesh.primitives.size(); i++) {
                 const tinygltf::Primitive& gltfPrim = gltfMesh.primitives[i];
                 GltfPrimitive p;
-                p.materialIndex = (gltfPrim.material < 0 ? 0 : gltfPrim.material);
+                p.materialIndex = (gltfPrim.material < 0 ? 0 : gltfPrim.material + 1);
                 if (gltfPrim.material < 0) p.materialIndex = 0; // first material should ALWAYS be a dummy mat
 
                 uint32_t currentNumIndices = 0;
