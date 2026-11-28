@@ -13,5 +13,6 @@ struct RenderSettings
 	u32 debugView = 0;
 	u32 tonemapper = 1;
 	bool vsync = true;
+	bool accumulate = true;
 };
 }

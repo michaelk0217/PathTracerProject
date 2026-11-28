@@ -154,6 +154,43 @@ void App::drawUi()
     ImGui::SameLine();
     if (ImGui::Button("Reset")) m_renderer->resetAccumulation();
 
+    // --- Accumulation froze for comparison ----
+    ImGui::SeparatorText("Render Settings");
+    if (ImGui::Checkbox("ReSTIR comparison mode", &m_comparisonMode)) {
+        if (m_comparisonMode) {
+            m_savedSettings = m_settings;
+            m_settings.maxBounces = 0;
+            m_settings.lightSampleCount = 1;
+            m_settings.accumulate = false;
+        }
+        else {
+            m_settings.maxBounces = m_savedSettings.maxBounces;
+            m_settings.lightSampleCount = m_savedSettings.lightSampleCount;
+            m_settings.accumulate = m_savedSettings.accumulate;
+        }
+    }
+    if (ImGui::IsItemHovered()) 
+    {
+        ImGui::SetTooltip("Direct lighting, 1 light sample, no accumulation");
+    }
+
+    ImGui::BeginDisabled(m_comparisonMode);
+    ImGui::Checkbox("Accumulate", &m_settings.accumulate);
+
+    // --- Light behavior ---
+    ImGui::Text("%u emissive triangles", m_renderer->lightCount());
+    if (m_renderer->lightCount() > 0)
+    {
+        const u32 minSamples = 1, maxSamples = 64;
+        ImGui::SliderScalar("Light samples", ImGuiDataType_U32, &m_settings.lightSampleCount, &minSamples, &maxSamples);
+    }
+
+    const u32 minBounces = 0;
+    const u32 maxBounces = 16;
+    ImGui::SliderScalar("Max Bounces", ImGuiDataType_U32, &m_settings.maxBounces, &minBounces, &maxBounces);
+
+    ImGui::EndDisabled();
+
     // --- Scene ---
     ImGui::SeparatorText("Scene");
     int sceneIndex = int(m_sceneId);
@@ -180,17 +217,7 @@ void App::drawUi()
     int v = int(m_settings.debugView);
     if (ImGui::Combo("View", &v, views, IM_ARRAYSIZE(views))) m_settings.debugView = u32(v);
 
-    // --- Light behavior ---
-    ImGui::Text("%u emissive triangles", m_renderer->lightCount());
-    if (m_renderer->lightCount() > 0) 
-    {
-        const u32 minSamples = 1, maxSamples = 64;
-        ImGui::SliderScalar("Light samples", ImGuiDataType_U32, &m_settings.lightSampleCount, &minSamples, &maxSamples);
-    }
-
-    const u32 minBounces = 0;
-    const u32 maxBounces = 16;
-    ImGui::SliderScalar("Max Bounces", ImGuiDataType_U32, &m_settings.maxBounces, &minBounces, &maxBounces);
+   
 
     ImGui::SliderFloat("Exposure", &m_settings.exposure, 0.1f, 50.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 
